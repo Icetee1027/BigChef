@@ -29,3 +29,7 @@ fastlane/screenshots
 # Temporary files
 *.tmp
 *.log
+
+# Firebase - secrets should not be version controlled
+GoogleService-Info.plist
+**/GoogleService-Info.plist

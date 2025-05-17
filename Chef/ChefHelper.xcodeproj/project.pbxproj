@@ -104,6 +104,11 @@
 			path = ChefHelper;
 			sourceTree = "<group>";
 		};
+		FCCA81082DD7BC8E003346E7 /* Routing */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Routing;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,6 +133,7 @@
 		30D9E04A2DA60DC0001CDE03 = {
 			isa = PBXGroup;
 			children = (
+				FCCA81082DD7BC8E003346E7 /* Routing */,
 				30DC26EE2DD5915E0081F80C /* AR */,
 				30501B4C2DC332B100CB2198 /* Shared */,
 				30D9E0552DA60DC0001CDE03 /* ChefHelper */,
@@ -221,6 +227,7 @@
 				30501B4C2DC332B100CB2198 /* Shared */,
 				30A657B12DC61CB90032C368 /* Coordinators */,
 				30D9E0552DA60DC0001CDE03 /* ChefHelper */,
+				FCCA81082DD7BC8E003346E7 /* Routing */,
 			);
 			name = ChefHelper;
 			packageProductDependencies = (
@@ -451,6 +458,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ChefHelper/Preview Content\"";
+				DEVELOPMENT_TEAM = YB987PVDMC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
@@ -468,7 +476,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mitchen.BigChef;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mitch.ChefHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -486,6 +494,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ChefHelper/Preview Content\"";
+				DEVELOPMENT_TEAM = YB987PVDMC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
@@ -503,7 +512,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mitchen.BigChef;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mitch.ChefHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -26,3 +26,4 @@ final class HistoryCoordinator: Coordinator {
         navigationController.pushViewController(page, animated: false)
     }
 }
+

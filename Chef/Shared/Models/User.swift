@@ -12,7 +12,7 @@ struct User: Identifiable, Codable { // 改為 Codable 以便於與 Firestore �
     @DocumentID var id: String? // Firestore 會自動填入文件 ID
     let username: String
     let fullname: String
-    let profileImageUrl: String?
+    var profileImageUrl: String?
     let email: String
 
     // 如果您希望在創建 User 物件時 id 就有值 (例如等於 uid)，
