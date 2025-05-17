@@ -1,0 +1,48 @@
+// !$*UTF8*$!
+{
+    // ... existing code ...
+    
+    /* Begin PBXBuildFile section */
+        30DC26EF2DD5915E0081F80C /* meat.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 30DC26E52DD5915E0081F80C /* meat.usdz */; };
+        30DC26F02DD5915E0081F80C /* flip.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 30DC26E42DD5915E0081F80C /* flip.usdz */; };
+        30DC26F22DD5915E0081F80C /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 30DC26E72DD5915E0081F80C /* Preview Assets.xcassets */; };
+        30DC26F32DD5915E0081F80C /* butter.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 30DC26E32DD5915E0081F80C /* butter.usdz */; };
+        68CE26CF2DD88C6200365F01 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 68CE26CE2DD88C6200365F01 /* GoogleService-Info.plist */; };
+        // ... existing code ...
+    /* End PBXBuildFile section */
+
+    /* Begin PBXFileReference section */
+        30AB0E1D2DD64F2700101557 /* ChefHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChefHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+        68CE26CE2DD88C6200365F01 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = GoogleService-Info.plist; path = Resources/GoogleService-Info.plist; sourceTree = "<group>"; };
+        // ... existing code ...
+    /* End PBXFileReference section */
+
+    /* Begin PBXResourcesBuildPhase section */
+        30D9E0512DA60DC0001CDE03 /* Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                30DC26EF2DD5915E0081F80C /* meat.usdz in Resources */,
+                30DC26F02DD5915E0081F80C /* flip.usdz in Resources */,
+                30DC26F22DD5915E0081F80C /* Preview Assets.xcassets in Resources */,
+                30DC26F32DD5915E0081F80C /* butter.usdz in Resources */,
+                68CE26CF2DD88C6200365F01 /* GoogleService-Info.plist in Resources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+    /* End PBXResourcesBuildPhase section */
+    
+    /* Begin PBXGroup section */
+        30D9E0552DA60DC0001CDE03 /* ChefHelper */ = {
+            isa = PBXGroup;
+            children = (
+                68CE26CE2DD88C6200365F01 /* GoogleService-Info.plist */,
+                // ... existing code ...
+            );
+            path = ChefHelper;
+            sourceTree = "<group>";
+        };
+    /* End PBXGroup section */
+    
+    // ... existing code ...
+} 

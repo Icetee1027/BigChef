@@ -5,35 +5,29 @@
 //  Created by 陳泓齊 on 2025/5/3.
 //
 
-//import UIKit
-//
-//final class AppCoordinator: Coordinator {
-//    var childCoordinators = [Coordinator]()
-//    private let window: UIWindow
-//    init(window: UIWindow) { self.window = window }
-//
-//    func start() {
-//        let main = MainTabCoordinator()
-//        store(main)
-//        window.rootViewController = main.root
-//        window.makeKeyAndVisible()
-//        main.start()
-//    }
-//}
 import UIKit
 
 @MainActor
 final class AppCoordinator: Coordinator {
+    // MARK: - Properties
     var childCoordinators: [Coordinator] = []
     var navigationController: UINavigationController
+    private let window: UIWindow
     
-    init(navigationController: UINavigationController) {
-        self.navigationController = navigationController
+    // MARK: - Initialization
+    init(window: UIWindow) {
+        self.window = window
+        self.navigationController = UINavigationController()
     }
     
+    // MARK: - Coordinator
     func start() {
-        let main = MainTabCoordinator(navigationController: navigationController)
-        addChildCoordinator(main)
-        main.start()
+        let mainCoordinator = MainTabCoordinator(navigationController: navigationController)
+        addChildCoordinator(mainCoordinator)
+        
+        window.rootViewController = navigationController
+        window.makeKeyAndVisible()
+        
+        mainCoordinator.start()
     }
 }
