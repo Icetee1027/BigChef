@@ -15,25 +15,57 @@ struct EquipmentListView: View {
             onEdit: onEdit,
             onDelete: onDelete
         )
-                }
-            }
+    }
+}
 
 struct EquipmentEditView: View {
-    @Binding var equipment: Equipment
-    var onSave: () -> Void
-
+    @State private var equipment: Equipment
+    let onSave: (Equipment) -> Void
+    let onCancel: () -> Void
+    
+    private var isNameValid: Bool {
+        !equipment.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    init(
+        equipment: Equipment,
+        onSave: @escaping (Equipment) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        _equipment = State(initialValue: equipment)
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+    
     var body: some View {
-        CommonEditView(
-            title: equipment.name.isEmpty ? "Add Equipment" : "Edit Equipment",
-            item: $equipment,
-            fields: [
-                ("Name", $equipment.name, true),
-                ("Type", $equipment.type, false),
-                ("Size", $equipment.size, false),
-                ("Material", $equipment.material, false),
-                ("Power Source", $equipment.power_source, false)
-            ],
-            onSave: onSave
-        )
+        NavigationStack {
+            Form {
+                Section("基本資訊") {
+                    TextField("名稱", text: $equipment.name)
+                        .foregroundColor(isNameValid ? .primary : .red)
+                    TextField("類型", text: $equipment.type)
+                }
+                
+                Section("規格") {
+                    TextField("尺寸", text: $equipment.size)
+                    TextField("材質", text: $equipment.material)
+                    TextField("電源", text: $equipment.power_source)
+                }
+            }
+            .navigationTitle(equipment.name.isEmpty ? "新增設備" : "編輯設備")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消", action: onCancel)
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("儲存") {
+                        onSave(equipment)
+                    }
+                    .disabled(!isNameValid)
+                }
+            }
+        }
     }
 }

@@ -12,13 +12,18 @@ import UIKit
 /// 目前只先顯示 AR 預覽，日後再加掃描框、Vision OCR 等功能
 @MainActor
 final class ScanViewController: BaseCameraViewController<ARSessionAdapter> {
-
-    private let viewModel = ScanningViewModel()
+    private let state = ScanningState()
+    private let viewModel: ScanningViewModel
 
     // MARK: - Init
     init() {
-        super.init(session: ARSessionAdapter())   // 共用 AR 版本的 Adapter
+        self.viewModel = ScanningViewModel(
+            state: state,
+            onNavigateToRecipe: { _ in }
+        )
+        super.init(session: ARSessionAdapter())
     }
+    
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     // MARK: - Lifecycle
@@ -39,13 +44,17 @@ final class ScanViewController: BaseCameraViewController<ARSessionAdapter> {
         ])
 
         // 使用空的偏好設定初始化
+        setupEmptyState()
+    }
+
+    private func setupEmptyState() {
         Task {
-            let emptyPreference = Preference(
+            _ = Preference(
                 cooking_method: "",
                 dietary_restrictions: [],
                 serving_size: "1人份"
             )
-            await viewModel.generateRecipe(with: emptyPreference)
+            await viewModel.generateRecipe()
         }
     }
 }

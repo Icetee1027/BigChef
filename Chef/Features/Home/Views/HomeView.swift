@@ -9,16 +9,18 @@
 import SwiftUI
 
 struct HomeView: View {
+    // MARK: - Properties
     @ObservedObject var viewModel: HomeViewModel
-    // @State var isNavigationToDish = false // 如果未使用，可以移除
-
+    @Environment(\.dismiss) private var dismiss
+    
+    // MARK: - Body
     var body: some View {
         ZStack {
             switch viewModel.viewState {
             case .loading:
-                ProgressView(Strings.fetchingRecords) // 確保 Strings.fetchingRecords 已定義
+                loadingView
             case .error(let message):
-                ErrorView(message) { // 確保 ErrorView 已定義
+                ErrorView(message) {
                     viewModel.fetchAllDishes()
                 }
             case .dataLoaded:
@@ -27,104 +29,183 @@ struct HomeView: View {
         }
         .onAppear {
             if viewModel.allDishes == nil {
-                 viewModel.fetchAllDishes()
+                viewModel.fetchAllDishes()
             }
+        }
+        .navigationBarHidden(true)
+    }
+    
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text(Strings.fetchingRecords)
+                .foregroundColor(.secondary)
         }
     }
     
-    var mainContent: some View {
+    // MARK: - Main Content
+    private var mainContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
+                // 頂部導航欄
+                topNavigationBar
                 
-                HStack {
-                    Spacer()
-                    Image("QuickFeatLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 40)
-                    Spacer()
-                    Button(action: {
-                        viewModel.requestLogout()
-                    }) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .foregroundColor(Color.brandOrange)
-                            .padding(8)
-                            .background(Color.gray.opacity(0.1))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.top)
-
-                // 使用 if let 來安全地解包 viewModel.allDishes
                 if let unwrappedAllDishes = viewModel.allDishes {
-                    // Food Category
-                    // 直接使用 unwrappedAllDishes.categories，因為它不是可選的
-                    // 並且檢查它是否為空
-                    if !unwrappedAllDishes.categories.isEmpty { // <--- 修正點
-                        VStack(alignment: .leading) {
-                           SectionTitleView(title: "菜品分類")
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 15) {
-                                    // categories 現在是 unwrappedAllDishes.categories
-                                    ForEach(unwrappedAllDishes.categories) { category in
-                                        CategoryView(dish: category)
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                            .frame(height: 128)
-                        }
-                        .padding(.bottom)
+                    // 菜品分類
+                    if !unwrappedAllDishes.categories.isEmpty {
+                        categorySection(categories: unwrappedAllDishes.categories)
                     }
-
-                    // Popular Dishes
-                    // 同樣，直接使用 unwrappedAllDishes.populars
+                    
+                    // 熱門菜品
                     if !unwrappedAllDishes.populars.isEmpty {
-                        VStack(alignment: .leading) {
-                            SectionTitleView(title: "熱門菜品")
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 15) {
-                                    ForEach(unwrappedAllDishes.populars) { dish in
-                                        PopularDishesView(dish: dish)
-                                            .onTapGesture {
-                                                viewModel.didSelectDish(dish)
-                                            }
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                            .frame(height: 250)
-                        }
-                        .padding(.bottom)
+                        popularDishesSection(dishes: unwrappedAllDishes.populars)
                     }
-
-                    // Recommended Dishes
-                    // 同樣，直接使用 unwrappedAllDishes.specials
+                    
+                    // 推薦菜品
                     if !unwrappedAllDishes.specials.isEmpty {
-                        VStack(alignment: .leading) {
-                            SectionTitleView(title: "推薦菜品")
-                            LazyVStack(spacing: 15) {
-                                ForEach(unwrappedAllDishes.specials) { dish in
-                                    RecommendedView(dish: dish)
-                                        .onTapGesture {
-                                            viewModel.didSelectDish(dish)
-                                        }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
+                        recommendedDishesSection(dishes: unwrappedAllDishes.specials)
                     }
-                } else {
-                    // 當 viewModel.allDishes 為 nil 時 (例如還在載入中或載入失敗且 viewState 不是 .dataLoaded)
-                    // 這裡可以選擇顯示一個提示，或者依賴 ZStack 中的 ProgressView/ErrorView
-                    Text("正在載入菜品資料...") // 或者保持為空，讓外層 ZStack 處理
-                        .padding()
                 }
+                
                 Spacer(minLength: 80)
             }
         }
         .background(Color(UIColor.secondarySystemBackground).edgesIgnoringSafeArea(.all))
+    }
+    
+    // MARK: - Top Navigation Bar
+    private var topNavigationBar: some View {
+        HStack {
+            Spacer()
+            Image("QuickFeatLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 40)
+            Spacer()
+            Button(action: {
+                viewModel.requestLogout()
+            }) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .foregroundColor(Color.brandOrange)
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top)
+    }
+    
+    // MARK: - Category Section
+    private func categorySection(categories: [DishCategory]) -> some View {
+        VStack(alignment: .leading) {
+            SectionTitleView(
+                title: "菜品分類",
+                onSeeAllTapped: {
+                    // TODO: 處理查看全部分類
+                    print("查看全部分類")
+                }
+            )
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 15) {
+                    ForEach(categories) { category in
+                        CategoryView(dish: category) {
+                            // TODO: 處理分類選擇
+                            print("選擇分類: \(category.name)")
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(height: 128)
+        }
+        .padding(.bottom)
+    }
+    
+    // MARK: - Popular Dishes Section
+    private func popularDishesSection(dishes: [Dish]) -> some View {
+        VStack(alignment: .leading) {
+            SectionTitleView(
+                title: "熱門菜品",
+                onSeeAllTapped: {
+                    // TODO: 處理查看全部熱門菜品
+                    print("查看全部熱門菜品")
+                }
+            )
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 15) {
+                    ForEach(dishes) { dish in
+                        PopularDishesView(
+                            dish: dish,
+                            isFavorite: false, // TODO: 從 ViewModel 獲取收藏狀態
+                            onTap: {
+                                viewModel.didSelectDish(dish)
+                            },
+                            onFavoriteTapped: {
+                                // TODO: 處理收藏
+                                print("收藏菜品: \(dish.name)")
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(height: 250)
+        }
+        .padding(.bottom)
+    }
+    
+    // MARK: - Recommended Dishes Section
+    private func recommendedDishesSection(dishes: [Dish]) -> some View {
+        VStack(alignment: .leading) {
+            SectionTitleView(
+                title: "推薦菜品",
+                onSeeAllTapped: {
+                    // TODO: 處理查看全部推薦菜品
+                    print("查看全部推薦菜品")
+                }
+            )
+            LazyVStack(spacing: 15) {
+                ForEach(dishes) { dish in
+                    RecommendedView(
+                        dish: dish,
+                        onTap: {
+                            viewModel.didSelectDish(dish)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+}
+
+// MARK: - Preview
+struct HomeView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            // 載入中狀態
+            HomeView(viewModel: {
+                let vm = HomeViewModel()
+                vm.viewState = .loading
+                return vm
+            }())
+            .previewDisplayName("載入中")
+            
+            // 錯誤狀態
+            HomeView(viewModel: {
+                let vm = HomeViewModel()
+                vm.viewState = .error(message: Strings.somethingWentWrong)
+                return vm
+            }())
+            .previewDisplayName("錯誤狀態")
+            
+            // 載入完成狀態
+            HomeView(viewModel: HomeViewModel.preview)
+                .previewDisplayName("載入完成")
+        }
     }
 }
 

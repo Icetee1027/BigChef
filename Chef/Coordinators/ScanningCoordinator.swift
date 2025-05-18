@@ -24,9 +24,19 @@ final class ScanningCoordinator: Coordinator, ObservableObject {
 
     // MARK: - Start
     func start() {
-        let viewModel = ScanningViewModel()
-        let view = ScanningView(viewModel: viewModel)
-            .environmentObject(self)
+        let state = ScanningState()
+        let viewModel = ScanningViewModel(
+            state: state,
+            onNavigateToRecipe: { [weak self] recipe in
+                self?.showRecipeDetail(recipe)
+            }
+        )
+        let view = ScanningView(
+            state: state,
+            viewModel: viewModel,
+            coordinator: self
+        )
+        .environmentObject(self)  // 在這裡注入 coordinator
         let hostingController = UIHostingController(rootView: view)
         navigationController.pushViewController(hostingController, animated: true)
     }

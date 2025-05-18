@@ -16,26 +16,35 @@ final class AuthCoordinator: Coordinator, ObservableObject {
     var navigationController: UINavigationController
     
     private let authViewModel: AuthViewModel
+    private weak var appCoordinator: AppCoordinator?
     
     // MARK: - Initialization
-    init(navigationController: UINavigationController) {
+    init(navigationController: UINavigationController, appCoordinator: AppCoordinator? = nil) {
         self.navigationController = navigationController
         self.authViewModel = AuthViewModel()
+        self.appCoordinator = appCoordinator
         setupViewModelCallbacks()
     }
     
     // MARK: - Coordinator
     func start() {
         if Auth.auth().currentUser != nil && authViewModel.currentUser != nil {
-            // 用戶已登入，不需要顯示登入頁面
+            // 用戶已登入，切換到主頁面
+            appCoordinator?.showMainFlow()
             return
         }
         
         if authViewModel.userSession != nil && authViewModel.currentUser == nil {
             // 嘗試重新獲取用戶資料
-            authViewModel.fetchUser { [weak self] success in
+            Task { [weak self] in
                 guard let self = self else { return }
-                if !success || self.authViewModel.currentUser == nil {
+                do {
+                    if let _ = try await self.authViewModel.fetchCurrentUser() {
+                        self.appCoordinator?.showMainFlow()
+                    } else {
+                        self.showLoginView()
+                    }
+                } catch {
                     self.showLoginView()
                 }
             }
@@ -47,39 +56,40 @@ final class AuthCoordinator: Coordinator, ObservableObject {
     // MARK: - Private Methods
     private func setupViewModelCallbacks() {
         authViewModel.onLoginSuccess = { [weak self] in
-            self?.navigationController.dismiss(animated: true)
+            guard let self = self else { return }
+            self.appCoordinator?.showMainFlow()
         }
         
         authViewModel.onRegistrationSuccess = { [weak self] in
-            self?.navigationController.dismiss(animated: true)
+            guard let self = self else { return }
+            self.appCoordinator?.showMainFlow()
         }
         
         authViewModel.onNavigateToRegistration = { [weak self] in
-            self?.showRegistrationView()
+            guard let self = self else { return }
+            self.showRegistrationView()
         }
         
         authViewModel.onNavigateBackToLogin = { [weak self] in
-            self?.navigationController.popViewController(animated: true)
+            guard let self = self else { return }
+            self.navigationController.popViewController(animated: true)
         }
         
         authViewModel.onAuthFailure = { [weak self] error in
-            self?.showError(error)
+            guard let self = self else { return }
+            self.showError(error)
         }
     }
     
     private func showLoginView() {
-        let loginView = LoginView()
-            .environmentObject(authViewModel)
+        let loginView = LoginView(viewModel: self.authViewModel)
         let hostingController = UIHostingController(rootView: loginView)
-        hostingController.title = "登入"
         navigationController.setViewControllers([hostingController], animated: false)
     }
     
     private func showRegistrationView() {
-        let registrationView = RegistrationView()
-            .environmentObject(authViewModel)
+        let registrationView = RegistrationView(viewModel: self.authViewModel)
         let hostingController = UIHostingController(rootView: registrationView)
-        hostingController.title = "註冊帳號"
         navigationController.pushViewController(hostingController, animated: true)
     }
     

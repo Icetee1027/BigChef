@@ -17,19 +17,22 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
     /// 提供給 AppCoordinator 當 rootViewController
 
     var navigationController: UINavigationController
-    init(navigationController: UINavigationController) {
+    weak var parentCoordinator: AppCoordinator?
+    
+    init(navigationController: UINavigationController, parentCoordinator: AppCoordinator? = nil) {
         self.navigationController = navigationController
+        self.parentCoordinator = parentCoordinator
     }
     
     // MARK: - Public
     func start() {
         let tabView = TabView {
-            // Recipe Tab
+            // Home Tab
             NavigationStack {
-                RecipeTabView(coordinator: self)
+                HomeTabView(coordinator: self)
             }
             .tabItem {
-                Label("Recipes", systemImage: "book.fill")
+                Label("首頁", systemImage: "house.fill")
             }
             
             // Scanning Tab
@@ -37,7 +40,7 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
                 ScanningTabView(coordinator: self)
             }
             .tabItem {
-                Label("Scan", systemImage: "camera.fill")
+                Label("掃描", systemImage: "camera.fill")
             }
             
             // Settings Tab
@@ -45,7 +48,7 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
                 SettingsView()
             }
             .tabItem {
-                Label("Settings", systemImage: "gear")
+                Label("設定", systemImage: "gear")
             }
         }
         
@@ -72,30 +75,55 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
         addChildCoordinator(coordinator)
         coordinator.start()
     }
+    
+    func handleLogout() {
+        print("MainTabCoordinator: 開始處理登出")
+        
+        // 清除所有子協調器
+        print("MainTabCoordinator: 清除子協調器")
+        childCoordinators.removeAll()
+        
+        // 通知父協調器處理登出
+        if let parentCoordinator = parentCoordinator {
+            print("MainTabCoordinator: 找到父協調器，通知處理登出")
+            parentCoordinator.handleLogout()
+        } else {
+            print("MainTabCoordinator: 錯誤 - 父協調器為空")
+        }
+    }
 }
 
 // MARK: - Tab Views
 
-private struct RecipeTabView: View {
+private struct HomeTabView: View {
     @ObservedObject var coordinator: MainTabCoordinator
-    @State private var recipeCoordinator: RecipeCoordinator?
+    @State private var homeCoordinator: HomeCoordinator?
+    @State private var viewModel: HomeViewModel?
     
     var body: some View {
         Group {
-            if let recipeCoordinator = recipeCoordinator {
-                RecipeView(viewModel: RecipeViewModel(response: SuggestRecipeResponse(
-                    dish_name: "",
-                    dish_description: "",
-                    ingredients: [],
-                    equipment: [],
-                    recipe: []
-                )))
-                .environmentObject(recipeCoordinator)
+            if let viewModel = viewModel {
+                HomeView(viewModel: viewModel)
             } else {
                 ProgressView()
                     .onAppear {
-                        recipeCoordinator = RecipeCoordinator(navigationController: coordinator.navigationController)
-                        coordinator.addChildCoordinator(recipeCoordinator!)
+                        // 先創建 HomeCoordinator
+                        let newHomeCoordinator = HomeCoordinator(
+                            navigationController: coordinator.navigationController,
+                            parentCoordinator: coordinator
+                        )
+                        coordinator.addChildCoordinator(newHomeCoordinator)
+                        self.homeCoordinator = newHomeCoordinator
+                        
+                        // 然後創建 ViewModel 並設置回調
+                        let newViewModel = HomeViewModel()
+                        newViewModel.onSelectDish = { [weak newHomeCoordinator] dish in
+                            newHomeCoordinator?.showDishDetail(dish)
+                        }
+                        newViewModel.onRequestLogout = { [weak newHomeCoordinator] in
+                            newHomeCoordinator?.handleLogout()
+                        }
+                        self.viewModel = newViewModel
                     }
             }
         }
@@ -109,8 +137,18 @@ private struct ScanningTabView: View {
     var body: some View {
         Group {
             if let scanningCoordinator = scanningCoordinator {
-                ScanningView(viewModel: ScanningViewModel())
-                    .environmentObject(scanningCoordinator)
+                let state = ScanningState()
+                let viewModel = ScanningViewModel(
+                    state: state,
+                    onNavigateToRecipe: { recipe in
+                        coordinator.showRecipeDetail(recipe)
+                    }
+                )
+                ScanningView(
+                    state: state,
+                    viewModel: viewModel,
+                    coordinator: scanningCoordinator
+                )
             } else {
                 ProgressView()
                     .onAppear {

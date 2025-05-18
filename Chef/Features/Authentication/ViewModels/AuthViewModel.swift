@@ -10,13 +10,20 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore // 確保導入 FirebaseFirestore
 
-class AuthViewModel: ObservableObject {
+@MainActor
+final class AuthViewModel: ObservableObject {
+    // MARK: - Published Properties
     @Published var userSession: FirebaseAuth.User?
     @Published var didAuthenticateUser = false // 可以用來觸發 UI 更新或流程轉換
     @Published var currentUser: User? // 您的 User model
+    @Published var isLoading = false
+    @Published var error: Error?
+    @Published var showError = false
     // private var tempUserSession: FirebaseAuth.User? // 在註冊流程中暫存用戶 session
-
+    
+    // MARK: - Private Properties
     private let service = UserService()
+    private var isShowingError = false // 防止重複顯示錯誤
 
     // MARK: - Coordinator Callbacks
     // 由 AuthCoordinator 設定這些回調
@@ -28,116 +35,127 @@ class AuthViewModel: ObservableObject {
     var onUserWantsToCancelAuth: (() -> Void)?  // 用戶明確取消驗證流程
 
     init() {
-        // 檢查當前 Firebase Auth 狀態
         self.userSession = Auth.auth().currentUser
-        if self.userSession != nil {
-            fetchUser() // 如果已有 session，獲取用戶資料
+        if let userSession = self.userSession {
+            Task {
+                service.fetchUser(withUid: userSession.uid) { [weak self] user in
+                    Task { @MainActor in
+                        self?.currentUser = user
+                    }
+                }
+            }
         }
         print("AuthViewModel: 初始化完成。User session: \(String(describing: userSession?.uid))")
     }
     
     // MARK: - Login
-    func login(withEmail email: String, password: String) {
-        print("AuthViewModel: 嘗試登入，Email: \(email)")
-        Auth.auth().signIn(withEmail: email, password: password) { [weak self] result, error in
-            guard let self = self else { return }
-            if let error = error {
-                print("AuthViewModel DEBUG: 登入失敗，錯誤: \(error.localizedDescription)")
-                self.onAuthFailure?(error) // 通知 Coordinator 登入失敗
-                return
-            }
-          
-            guard let user = result?.user else {
-                let unknownError = NSError(domain: "AuthViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "登入後無法獲取用戶物件"])
-                print("AuthViewModel DEBUG: 登入後無法獲取用戶物件")
-                self.onAuthFailure?(unknownError)
-                return
-            }
-            self.userSession = user
-            self.fetchUser { success in // fetchUser 現在有一個完成回調
-                if success {
-                    print("AuthViewModel DEBUG: 用戶已登入並獲取資料: \(String(describing: self.userSession?.email))")
-                    self.didAuthenticateUser = true // 更新狀態
-                    self.onLoginSuccess?()      // 通知 Coordinator 登入成功
-                } else {
-                    // 即使 Firebase 登入成功，但如果 fetchUser 失敗，也視為一種驗證問題
-                    let fetchError = NSError(domain: "AuthViewModel", code: -2, userInfo: [NSLocalizedDescriptionKey: "登入成功但獲取用戶詳細資料失敗"])
-                    self.onAuthFailure?(fetchError)
+    func login(withEmail email: String, password: String) async {
+        guard !isLoading else { return }
+        
+        do {
+            try ValidationUtils.validateEmail(email)
+            try ValidationUtils.validatePassword(password)
+            
+            isLoading = true
+            defer { isLoading = false }
+            
+            let authResult = try await Auth.auth().signIn(withEmail: email, password: password)
+            let firebaseUser = authResult.user
+            self.userSession = firebaseUser
+            
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                service.fetchUser(withUid: firebaseUser.uid) { [weak self] fetchedUser in
+                    Task { @MainActor in
+                        guard let self = self else { return }
+                        if let fetchedUser = fetchedUser {
+                            self.currentUser = fetchedUser
+                            self.didAuthenticateUser = true
+                            self.onLoginSuccess?()
+                            continuation.resume()
+                        } else {
+                            continuation.resume(throwing: ValidationError.emptyField("用戶資料"))
+                        }
+                    }
                 }
             }
+        } catch {
+            await handleError(error)
         }
     }
     
     // MARK: - Register
-    func register(withEmail email: String, password: String, fullname: String, username: String, profileImage: UIImage? = nil) {
-        print("AuthViewModel: 嘗試註冊，Email: \(email), Username: \(username)")
-        Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
-            guard let self = self else { return }
-            if let error = error {
-                print("AuthViewModel DEBUG: 註冊 Firebase Auth 失敗，錯誤: \(error.localizedDescription)")
-                self.onAuthFailure?(error) // 通知 Coordinator 註冊失敗
-                return
-            }
+    func register(withEmail email: String, password: String, fullname: String, username: String, profileImage: UIImage? = nil) async {
+        guard !isLoading else { return }
         
-            guard let firebaseUser = result?.user else {
-                let unknownError = NSError(domain: "AuthViewModel", code: -3, userInfo: [NSLocalizedDescriptionKey: "註冊後無法獲取 Firebase 用戶物件"])
-                print("AuthViewModel DEBUG: 註冊後無法獲取 Firebase 用戶物件")
-                self.onAuthFailure?(unknownError)
-                return
-            }
-              
+        do {
+            try ValidationUtils.validateEmail(email)
+            try ValidationUtils.validatePassword(password)
+            try ValidationUtils.validateUsername(username)
+            try ValidationUtils.validateFullname(fullname)
+            
+            isLoading = true
+            defer { isLoading = false }
+            
+            let authResult = try await Auth.auth().createUser(withEmail: email, password: password)
+            let firebaseUser = authResult.user
             let userData: [String: Any] = [
                 "email": email,
                 "username": username.lowercased(),
                 "fullname": fullname,
-                "uid": firebaseUser.uid,
-                // "profileImageUrl": "" // 初始可以為空或預設值
+                "uid": firebaseUser.uid
             ]
             
-            Firestore.firestore().collection("users")
+            try await Firestore.firestore().collection("users")
                 .document(firebaseUser.uid)
-                .setData(userData) { [weak self] error in
-                    guard let self = self else { return }
-                    if let error = error {
-                        print("AuthViewModel DEBUG: 上傳用戶資料到 Firestore 失敗，錯誤: \(error.localizedDescription)")
-                        // 這裡可以選擇是否也觸發 onAuthFailure，或者認為 Auth 成功但資料儲存失敗
-                        // 為了流程一致性，也視為一種驗證流程的失敗
-                        self.onAuthFailure?(error)
-                        return
-                    }
-                    
-                    print("AuthViewModel DEBUG: 用戶資料已上傳到 Firestore。")
-                    // 註冊成功後，用戶已登入，設定 userSession
-                    self.userSession = firebaseUser
-
-                    if let imageToUpload = profileImage {
-                        self.uploadProfileImage(imageToUpload, for: firebaseUser) { success in
-                            if success {
-                                self.completeRegistration()
-                            } else {
-                                // 圖片上傳失敗，但用戶資料已創建。可以選擇是否視為整體失敗。
-                                // 為了簡化，我們先假設即使圖片失敗，註冊（用戶創建）也算成功。
-                                print("AuthViewModel WARNING: 個人圖片上傳失敗，但註冊流程繼續。")
-                                self.completeRegistration()
-                            }
+                .setData(userData)
+            
+            self.userSession = firebaseUser
+            
+            if let imageToUpload = profileImage {
+                do {
+                    let profileImageUrl = try await uploadProfileImage(imageToUpload)
+                    try await Firestore.firestore().collection("users")
+                        .document(firebaseUser.uid)
+                        .updateData(["profileImageUrl": profileImageUrl])
+                } catch {
+                    print("警告：個人圖片上傳失敗，但註冊流程繼續")
+                }
+            }
+            
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                service.fetchUser(withUid: firebaseUser.uid) { [weak self] fetchedUser in
+                    Task { @MainActor in
+                        guard let self = self else { return }
+                        if let fetchedUser = fetchedUser {
+                            self.currentUser = fetchedUser
+                            self.didAuthenticateUser = true
+                            self.onRegistrationSuccess?()
+                            continuation.resume()
+                        } else {
+                            continuation.resume(throwing: ValidationError.emptyField("用戶資料"))
                         }
-                    } else {
-                        self.completeRegistration()
                     }
                 }
+            }
+        } catch {
+            await handleError(error)
         }
     }
 
-    private func completeRegistration() {
-        self.fetchUser { success in // 獲取剛註冊的用戶的完整資料
-            if success {
-                print("AuthViewModel DEBUG: 註冊流程完成，用戶資料已獲取。")
-                self.didAuthenticateUser = true
-                self.onRegistrationSuccess?() // 通知 Coordinator 註冊成功
-            } else {
-                let fetchError = NSError(domain: "AuthViewModel", code: -4, userInfo: [NSLocalizedDescriptionKey: "註冊成功但獲取用戶詳細資料失敗"])
-                self.onAuthFailure?(fetchError)
-            }
+    private func handleError(_ error: Error) async {
+        guard !isShowingError else { return }
+        isShowingError = true
+        
+        await MainActor.run {
+            self.error = error
+            self.showError = true
+            self.onAuthFailure?(error)
+        }
+        
+        // 延遲重置錯誤狀態，防止快速重複顯示
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1秒
+        await MainActor.run {
+            self.isShowingError = false
         }
     }
     
@@ -159,49 +177,20 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Profile Image Upload (for registration or profile update)
-    private func uploadProfileImage(_ image: UIImage, for firebaseUser: FirebaseAuth.User, completion: @escaping (Bool) -> Void) {
+    // MARK: - Profile Image Upload
+    private func uploadProfileImage(_ image: UIImage) async throws -> String {
         print("AuthViewModel: 上傳個人圖片中...")
-        ImageUploader.uploadImage(image: image) { [weak self] profileImageUrl in
-            guard let self = self else { completion(false); return }
-            Firestore.firestore().collection("users")
-                .document(firebaseUser.uid)
-                .updateData(["profileImageUrl": profileImageUrl]) { error in
-                    if let error = error {
-                        print("AuthViewModel DEBUG: 更新個人圖片 URL 到 Firestore 失敗: \(error.localizedDescription)")
-                        completion(false)
-                        return
-                    }
-                    print("AuthViewModel DEBUG: 個人圖片 URL 已更新到 Firestore。")
-                    // 更新本地 currentUser 的圖片 URL (如果需要立即反映)
-                    self.currentUser?.profileImageUrl = profileImageUrl
-                    completion(true)
+        return try await withCheckedThrowingContinuation { continuation in
+            ImageUploader.uploadImage(image: image) { imageUrl in
+                if !imageUrl.isEmpty {
+                    continuation.resume(returning: imageUrl)
+                } else {
+                    continuation.resume(throwing: ValidationError.emptyField("圖片上傳失敗"))
                 }
-        }
-    }
-    
-    // MARK: - Fetch User Data
-    // 加入一個完成回調，以便在操作完成後執行特定邏輯
-    func fetchUser(completion: ((Bool) -> Void)? = nil) {
-        guard let uid = self.userSession?.uid else {
-            print("AuthViewModel: fetchUser 失敗，因為 userSession?.uid 為 nil")
-            completion?(false)
-            return
-        }
-        print("AuthViewModel: 獲取用戶資料中，UID: \(uid)")
-        service.fetchUser(withUid: uid) { [weak self] user in
-            guard let self = self else { completion?(false); return }
-            self.currentUser = user
-            if user != nil {
-                print("AuthViewModel DEBUG: 用戶資料已獲取: \(String(describing: user?.username))")
-                completion?(true)
-            } else {
-                print("AuthViewModel DEBUG: 未能獲取用戶資料 (service.fetchUser 回傳 nil)")
-                completion?(false)
             }
         }
     }
-
+    
     // MARK: - Navigation Triggers (called by View, handled by Coordinator)
     func requestNavigateToRegistration() {
         print("AuthViewModel: 請求導航到註冊頁面")
@@ -216,5 +205,23 @@ class AuthViewModel: ObservableObject {
     func requestCancelAuthentication() {
         print("AuthViewModel: 請求取消驗證流程")
         onUserWantsToCancelAuth?()
+    }
+
+    // MARK: - Public Methods
+    func fetchCurrentUser() async throws -> User? {
+        guard let userSession = userSession else { return nil }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            service.fetchUser(withUid: userSession.uid) { [weak self] user in
+                Task { @MainActor in
+                    if let user = user {
+                        self?.currentUser = user
+                        continuation.resume(returning: user)
+                    } else {
+                        continuation.resume(throwing: ValidationError.emptyField("用戶資料"))
+                    }
+                }
+            }
+        }
     }
 }
