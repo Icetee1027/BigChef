@@ -1,29 +1,33 @@
-//
-//  AppDelegate.swift
-//  ChefHelper
-//
-//  Created by 陳泓齊 on 2025/5/4.
-//
-
 import UIKit
+import Firebase
 
-// 同時採用 UIApplicationDelegate + UIWindowSceneDelegate
-class AppDelegate: NSObject,
-                   UIApplicationDelegate,
-                   UIWindowSceneDelegate {
+@MainActor
+class AppDelegate: NSObject, UIApplicationDelegate, UIWindowSceneDelegate {
+    // MARK: - 屬性區
 
+    /// UIWindow 是整個畫面的根容器
     var window: UIWindow?
+
+    /// AppCoordinator 負責畫面流程的管理（登入/主畫面等）
     var appCoordinator: AppCoordinator?
 
-    // ① 告訴系統：這個 Scene 仍用預設設定，
-    //    但 Scene 的 delegate 直接就是 AppDelegate 自己
+    // MARK: - App 啟動時呼叫
     func application(
         _ application: UIApplication,
-        configurationForConnecting
-            connectingSceneSession: UISceneSession,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // 初始化 Firebase（很重要，否則 Firebase 功能無法使用）
+        FirebaseApp.configure()
+        return true
+    }
+
+    // MARK: - 每當 app 建立新畫面（Scene）時會呼叫
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-
+        // 告訴系統這個畫面要使用哪個 Scene delegate class（這裡就是自己）
         let cfg = UISceneConfiguration(
             name: nil,
             sessionRole: connectingSceneSession.role
@@ -32,26 +36,24 @@ class AppDelegate: NSObject,
         return cfg
     }
 
-    // ② Scene 建立完成，這裡一定拿得到 UIWindowScene
+    // MARK: - 每個畫面要顯示前都會呼叫這裡
     func scene(
         _ scene: UIScene,
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
-
+        // 先確認這是個 UIWindowScene（iPad 或多視窗模式用）
         guard let windowScene = scene as? UIWindowScene else { return }
 
+        // 初始化 UIWindow（畫面容器）
         let window = UIWindow(windowScene: windowScene)
         self.window = window
 
-        // 建立導航控制器
-        let nav = UINavigationController()
-        window.rootViewController = nav
-        window.makeKeyAndVisible()
-
-        // 啟動 AppCoordinator
-        let coordinator = AppCoordinator(nav: nav)
+        // 建立 AppCoordinator 並交給它管理畫面
+        let coordinator = AppCoordinator(window: window)
         self.appCoordinator = coordinator
+
+        // 啟動 Coordinator（通常會顯示登入或主畫面）
         coordinator.start()
 
         print("✅ AppCoordinator.start() 完成，root = \(nav)")

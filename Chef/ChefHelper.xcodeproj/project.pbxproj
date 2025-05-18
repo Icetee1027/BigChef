@@ -130,28 +130,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		30883FB32DD880EE006FC718 /* Utilities */ = {
-			isa = PBXGroup;
-			children = (
-				30883FB02DD880EE006FC718 /* NetworkError.swift */,
-				30883FB12DD880EE006FC718 /* Strings.swift */,
-				30883FB22DD880EE006FC718 /* ViewState.swift */,
-			);
-			path = Utilities;
-			sourceTree = "<group>";
-		};
 		30D9E04A2DA60DC0001CDE03 = {
 			isa = PBXGroup;
 			children = (
-				30883FB32DD880EE006FC718 /* Utilities */,
-				30DC26EE2DD5915E0081F80C /* AR */,
 				30501B4C2DC332B100CB2198 /* Shared */,
-				30D9E0552DA60DC0001CDE03 /* ChefHelper */,
 				30501B422DC331C700CB2198 /* Features */,
 				30A657B12DC61CB90032C368 /* Coordinators */,
+				30D9E0552DA60DC0001CDE03 /* ChefHelper */,
+				30DC26EE2DD5915E0081F80C /* AR */,
 				30DC27052DD591D00081F80C /* Frameworks */,
 				30AB0E1D2DD64F2700101557 /* ChefHelper.app */,
 				FCEA7E0E2DD7723700B2D1A2 /* Utilities */,
+				688ED9C82DDA191100AA45ED /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -214,6 +204,16 @@
 				30DC27062DD591D00081F80C /* ARKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		688ED9C82DDA191100AA45ED /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				30883FB12DD880EE006FC718 /* Strings.swift */,
+				30883FB22DD880EE006FC718 /* ViewState.swift */,
+				30883FB02DD880EE006FC718 /* NetworkError.swift */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 		FCEA7E0E2DD7723700B2D1A2 /* Utilities */ = {
