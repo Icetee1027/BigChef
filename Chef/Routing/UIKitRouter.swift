@@ -47,39 +47,19 @@ class UIKitRouter: NSObject, Router, UINavigationControllerDelegate {
     // pop 方法不再需要 'override' 關鍵字，因為它是對 Router 協定方法的實作，
     // 而 Router 協定的 pop 方法在 extension 中有預設實作。
     func pop(animated: Bool, completion: (() -> Void)? = nil) {
-        // 取得將要被 pop 的 ViewController (如果堆疊中至少有兩個)
-        // 這樣做的目的是為了在 navigationController.popViewController 之後，
-        // 如果這個被 pop 的 VC 有註冊的 onPopCompletion，可以手動觸發它。
-        // 這對於直接呼叫 router.pop() 的情況比較有用。
-        // 對於用戶手勢返回，UINavigationControllerDelegate 的 didShow 方法會處理。
-        let viewControllerToPop = navigationController.viewControllers.count > 1 ? navigationController.viewControllers[navigationController.viewControllers.count - 2] : nil
-
-
         navigationController.popViewController(animated: animated)
 
         // 處理外部傳入的 pop 動畫完成回調 (如果有的話)
-        // 這個 completion 通常是指 pop 動畫本身的完成。
         if let externalCompletion = completion {
             if !animated {
                 externalCompletion()
             } else {
                 // 動畫完成後執行
-                // 注意：UINavigationController.popViewController 並沒有直接的動畫完成回調
-                // CATransaction 在這裡可能不適用於 pop 的完成。
-                // 一個常見的近似方法是使用 DispatchQueue.main.asyncAfter
-                DispatchQueue.main.asyncAfter(deadline: .now() + (animated ? 0.35 : 0.0)) { // 0.35s 是一個估計的動畫時間
+                DispatchQueue.main.asyncAfter(deadline: .now() + (animated ? 0.35 : 0.0)) {
                     externalCompletion()
                 }
             }
         }
-        
-        // 如果是直接呼叫 router.pop()，且被 pop 的 VC 有註冊的 onPopCompletion，
-        // 這裡可以嘗試觸發它。但更可靠的觸發點是 UINavigationControllerDelegate 的 didShow。
-        // 為了避免重複觸發 (一次來自這裡，一次來自 delegate)，通常只依賴 delegate。
-        // 但如果有些情況下 delegate 不會被觸發 (例如非動畫的 pop 或特殊情況)，這裡可以作為備用。
-        // 不過，為了簡潔和避免衝突，我們主要依賴 delegate 中的邏輯來處理 onPopCompletions。
-        // 此處的 viewControllerToPop 是基於 pop 之前的狀態，若 pop 成功，delegate 中的 fromViewController 會是它。
-        // print("Router: Direct pop call, viewControllerToPop: \(String(describing: viewControllerToPop))")
     }
 
     func setRootViewController(_ viewController: UIViewController, animated: Bool) {
@@ -110,5 +90,9 @@ class UIKitRouter: NSObject, Router, UINavigationControllerDelegate {
             callback()
             onPopCompletions.removeValue(forKey: address) // 執行後移除回調
         }
+    }
+
+    func popViewController(animated: Bool = true) {
+        let _ = navigationController.popViewController(animated: animated)
     }
 }

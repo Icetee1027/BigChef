@@ -8,92 +8,172 @@
 import SwiftUI
 
 struct RegistrationView: View {
+    @StateObject var viewModel: AuthViewModel
     @State private var email = ""
     @State private var username = ""
     @State private var fullname = ""
     @State private var password = ""
-    @Environment(\.presentationMode) var presentationMode
-    @EnvironmentObject var viewModel: AuthViewModel
+    @State private var confirmPassword = ""
+    @State private var isPasswordValid = false
+    @State private var isConfirmPasswordValid = false
+    @State private var isEmailValid = false
+    @State private var isUsernameValid = false
+    @State private var isFullnameValid = false
+    
     var body: some View {
-        VStack {
-            
-//            NavigationLink(destination: ProfilePhotoSelectorView(),
-//                           isActive: $viewModel.didAuthenticateUser,
-//                           label: { })
-            
-            AuthHeaderView(title1: "Get started,", title2: "Create your account")
-            
-            VStack(spacing: 40) {
-                CustomInputField(imageName: "envelope",
-                                 placeholderText: "Email",
-                                 textCase: .lowercase,
-                                 keyboardType: .emailAddress,
-                                 textContentType: .emailAddress,
-                                 text: $email)
+        NavigationStack {
+            VStack {
+                // Logo
+                Image("QuickFeatLogo")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 100, height: 100)
+                    .padding(.vertical, 32)
                 
-                CustomInputField(imageName: "person",
-                                 placeholderText: "Username",
-                                 textCase: .lowercase,
-                                 keyboardType: .default,
-                                 textContentType: .username,
-                                 text: $username)
-                
-                CustomInputField(imageName: "person",
-                                 placeholderText: "Full name",
-                                 textContentType: .name,
-                                 textInputAutoCapital: .words,
-                                 text: $fullname)
-                
-                CustomInputField(imageName: "lock",
-                                 placeholderText: "Password",
-                                 textContentType: .newPassword,
-                                 isSecureField: true,
-                                 text: $password)
-            }
-            .padding(32)
-            
-            Button {
-                print("Sign Up")
-                viewModel.register(withEmail: email,
-                                   password: password,
-                                   fullname: fullname,
-                                   username: username)
-            } label: {
-                Text("Sign Up")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(width: 340, height: 50)
-                    .background(Color.black)
-                    .clipShape(Capsule())
-                    .padding()
-            }
-            .shadow(color: .gray.opacity(0.5), radius: 10, x: 0, y: 0)
-            
-            
-            Spacer()
-            
-            Button {
-                presentationMode.wrappedValue.dismiss()
-            } label: {
-                HStack {
-                    Text("Already have an account?")
-                        .font(.footnote)
+                // Form fields
+                VStack(spacing: 24) {
+                    CustomInputField(
+                        imageName: "envelope",
+                        placeholderText: "電子郵件",
+                        text: $email,
+                        textCase: .lowercase,
+                        keyboardType: .emailAddress,
+                        textContentType: .emailAddress,
+                        validationRules: [
+                            { $0.contains("@") },
+                            { $0.contains(".") },
+                            { $0.count >= 5 }
+                        ],
+                        errorMessage: "請輸入有效的電子郵件地址"
+                    )
+                    .onChange(of: email) { oldValue, newValue in
+                        isEmailValid = newValue.contains("@") && newValue.contains(".") && newValue.count >= 5
+                    }
                     
-                    Text("Sign In")
-                        .font(.footnote)
-                        .fontWeight(.semibold)
+                    CustomInputField(
+                        imageName: "person",
+                        placeholderText: "使用者名稱",
+                        text: $username,
+                        textCase: .lowercase,
+                        keyboardType: .default,
+                        textContentType: .username,
+                        validationRules: [
+                            { $0.count >= 3 },
+                            { $0.count <= 20 },
+                            { $0.range(of: "^[a-zA-Z0-9_]+$", options: .regularExpression) != nil }
+                        ],
+                        errorMessage: "使用者名稱需為3-20個字符，只能包含英文字母、數字和底線"
+                    )
+                    .onChange(of: username) { oldValue, newValue in
+                        isUsernameValid = newValue.count >= 3 && newValue.count <= 20 &&
+                            newValue.range(of: "^[a-zA-Z0-9_]+$", options: .regularExpression) != nil
+                    }
+                    
+                    CustomInputField(
+                        imageName: "person.fill",
+                        placeholderText: "姓名",
+                        text: $fullname,
+                        textCase: nil,
+                        keyboardType: .default,
+                        textContentType: .name,
+                        validationRules: [
+                            { $0.count >= 2 },
+                            { $0.count <= 50 }
+                        ],
+                        errorMessage: "姓名長度需在2-50個字符之間"
+                    )
+                    .onChange(of: fullname) { oldValue, newValue in
+                        isFullnameValid = newValue.count >= 2 && newValue.count <= 50
+                    }
+                    
+                    SecureInputField(
+                        placeholder: "密碼",
+                        iconName: "lock",
+                        text: $password,
+                        confirmText: $confirmPassword,
+                        mode: .register,
+                        onValidationChanged: { isValid in
+                            isPasswordValid = isValid
+                        }
+                    )
+                    
+                    SecureInputField(
+                        placeholder: "確認密碼",
+                        iconName: "lock",
+                        text: $confirmPassword,
+                        confirmText: $password,
+                        mode: .register,
+                        isConfirmField: true,
+                        onValidationChanged: { isValid in
+                            isConfirmPasswordValid = isValid
+                        }
+                    )
                 }
+                .padding(.horizontal, 32)
+                .padding(.top, 12)
+                
+                // Sign up button
+                Button {
+                    Task {
+                        await viewModel.register(
+                            withEmail: email,
+                            password: password,
+                            fullname: fullname,
+                            username: username
+                        )
+                    }
+                } label: {
+                    HStack {
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .padding(.trailing, 8)
+                        }
+                        Text("註冊")
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: UIScreen.main.bounds.width - 64, height: 48)
+                    .background(
+                        (isEmailValid && isUsernameValid && isFullnameValid && 
+                         isPasswordValid && isConfirmPasswordValid) ? Color.brandOrange : Color.gray
+                    )
+                    .cornerRadius(10)
+                }
+                .disabled(
+                    !isEmailValid || !isUsernameValid || !isFullnameValid || 
+                    !isPasswordValid || !isConfirmPasswordValid || viewModel.isLoading
+                )
+                .padding(.top, 24)
+                
+                Spacer()
+                
+                // Sign in link
+                NavigationLink {
+                    LoginView(viewModel: viewModel)
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("已有帳號？")
+                            .foregroundColor(.gray)
+                        Text("登入")
+                            .fontWeight(.bold)
+                            .foregroundColor(.brandOrange)
+                    }
+                    .font(.footnote)
+                }
+                .padding(.bottom, 32)
             }
-            .padding(.bottom, 32)
-
         }
-        .ignoresSafeArea()
+        .alert("錯誤", isPresented: $viewModel.showError) {
+            Button("確定", role: .cancel) {}
+        } message: {
+            Text(viewModel.error?.localizedDescription ?? "發生未知錯誤")
+        }
     }
 }
 
 struct RegistrationView_Previews: PreviewProvider {
     static var previews: some View {
-        RegistrationView()
-            .environmentObject(AuthViewModel())
+        RegistrationView(viewModel: AuthViewModel())
     }
 }

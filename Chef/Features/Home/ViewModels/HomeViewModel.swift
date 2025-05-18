@@ -12,49 +12,72 @@ import Combine
 import SwiftUI
 
 // MARK: - View State
-enum ViewState {
+enum ViewState: Equatable {
     case loading
     case error(message: String)
     case dataLoaded
+    
+    static func == (lhs: ViewState, rhs: ViewState) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading):
+            return true
+        case (.error(let lhsMessage), .error(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.dataLoaded, .dataLoaded):
+            return true
+        default:
+            return false
+        }
+    }
 }
 
-// MARK: - Strings
+// MARK: - Localized Strings
 enum Strings {
-    static let somethingWentWrong = "Something went wrong!"
-    static let requestTimeout = "Request timeout, please retry"
-    static let fetchingRecords = "Fetching dishes, Please Be Patient"
-    static let fetchingMoreRecords = "Fetching more records"
-    static let noInternet = "Internet not available, please check internet connection"
-    static let noCharactersFound = "No character found!"
+    static let somethingWentWrong = "發生錯誤，請稍後再試"
+    static let requestTimeout = "請求超時，請重試"
+    static let fetchingRecords = "正在載入菜品資料..."
+    static let fetchingMoreRecords = "正在載入更多資料..."
+    static let noInternet = "網路連線異常，請檢查網路設定"
+    static let noCharactersFound = "找不到相關菜品"
 }
 
+// MARK: - Home View Model
 final class HomeViewModel: ObservableObject {
-
+    // MARK: - Properties
     private let service: NetworkServiceProtocol
     private var cancellables = Set<AnyCancellable>()
+    
     @Published var viewState: ViewState = .loading
     @Published var allDishes: AllDishes?
-
+    
     // MARK: - Coordinator Callbacks
-    var onSelectDish: ((Dish) -> Void)? // 假設這個已存在或將來會用到
-    var onRequestLogout: (() -> Void)?   // 新增：登出請求回調
-
+    var onSelectDish: ((Dish) -> Void)?
+    var onRequestLogout: (() -> Void)?
+    
+    // MARK: - Initialization
     init(service: NetworkServiceProtocol = NetworkService()) {
         self.service = service
-        // fetchAllDishes() // 考慮是否在 init 時自動載入，或由 View 的 onAppear 觸發
     }
-
+    
+    // MARK: - Public Methods
     func fetchAllDishes() {
         self.viewState = .loading
-        // 確保您的 API URL 正確
+        
         service.request(url: "https://yummie.glitch.me/dish-categories", decodeType: APIResponse.self)
             .sink { [weak self] completion in
                 guard let self = self else { return }
                 switch completion {
                 case .failure(let error):
                     print("HomeViewModel: 獲取菜品失敗 - \(error.localizedDescription)")
-                    if let error = error as? URLError, error.code == .timedOut {
-                        self.viewState = .error(message: Strings.requestTimeout)
+                    if let error = error as? URLError {
+                        switch error.code {
+                        case .timedOut:
+                            self.viewState = .error(message: Strings.requestTimeout)
+                        case .notConnectedToInternet:
+                            self.viewState = .error(message: Strings.noInternet)
+                        default:
+                            self.viewState = .error(message: Strings.somethingWentWrong)
+                        }
                     } else {
                         self.viewState = .error(message: Strings.somethingWentWrong)
                     }
@@ -68,14 +91,24 @@ final class HomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
-
+    
     // MARK: - User Actions
     func didSelectDish(_ dish: Dish) {
         onSelectDish?(dish)
     }
-
+    
     func requestLogout() {
         print("HomeViewModel: 用戶請求登出")
         onRequestLogout?()
+    }
+}
+
+// MARK: - Preview Helper
+extension HomeViewModel {
+    static var preview: HomeViewModel {
+        let viewModel = HomeViewModel()
+        viewModel.allDishes = AllDishes.preview
+        viewModel.viewState = .dataLoaded
+        return viewModel
     }
 }

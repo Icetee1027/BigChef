@@ -1,12 +1,7 @@
 import Foundation
 
 enum RecipeService {
-    private static var baseURL: String {
-        guard let url = ProcessInfo.processInfo.environment["BASE_URL"] else {
-            fatalError("❌ BASE_URL is not set in the environment variables.")
-        }
-        return url
-    }
+    private static let baseURL = "http://192.168.0.106:8080"  // 直接寫死 BASE_URL
 
     // MARK: - 食譜生成 async 函式
     static func generateRecipe(using request: SuggestRecipeRequest) async throws -> SuggestRecipeResponse {
