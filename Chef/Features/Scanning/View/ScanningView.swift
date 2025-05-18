@@ -1,16 +1,6 @@
 import SwiftUI
 
-// MARK: - Models
-struct ScanningState {
-    var preference = Preference(
-        cooking_method: "一般烹調",  // 預設值
-        dietary_restrictions: [],
-        serving_size: "1人份"
-    )
-    var activeSheet: ScanningSheet?
-    var showCompletionAlert = false
-    var scanSummary = ""
-}
+
 
 // MARK: - Sheet Type
 enum ScanningSheet: Identifiable {
@@ -264,18 +254,6 @@ struct ScanningView: View {
     }
 }
 
-// MARK: - Model Extensions
-private extension Ingredient {
-    static var empty: Self {
-        Ingredient(name: "", type: "", amount: "", unit: "", preparation: "")
-    }
-}
-
-private extension Equipment {
-    static var empty: Self {
-        Equipment(name: "", type: "", size: "", material: "", power_source: "")
-    }
-}
 
 // MARK: - Preview
 struct ScanningView_Previews: PreviewProvider {
