@@ -7,13 +7,20 @@
 
 
 import UIKit
+import SwiftUI
 
 /// 「開始烹飪」AR 流程 —— 延續你原本 ARCameraVC 的 UI
 final class CookViewController: BaseCameraViewController<ARSessionAdapter> {
 
     // MARK: - Data
     private let steps: [RecipeStep]
-    private var currentIndex = 0 { didSet { updateStepLabel() } }
+    private let stepViewModel = StepViewModel()
+    private var currentIndex = 0 {
+        didSet {
+            updateStepLabel()
+            stepViewModel.currentDescription = steps[currentIndex].description
+        }
+    }
 
     // MARK: - UI
     private let stepLabel = UILabel()
@@ -30,6 +37,18 @@ final class CookViewController: BaseCameraViewController<ARSessionAdapter> {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        let arContainer = UIHostingController(rootView: CookingARView(viewModel: stepViewModel))
+        addChild(arContainer)
+        view.insertSubview(arContainer.view, at: 0)
+        arContainer.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            arContainer.view.topAnchor.constraint(equalTo: view.topAnchor),
+            arContainer.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            arContainer.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            arContainer.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+        arContainer.didMove(toParent: self)
 
         // ▲ Step Label
         stepLabel.numberOfLines = 0
@@ -60,6 +79,11 @@ final class CookViewController: BaseCameraViewController<ARSessionAdapter> {
         ])
 
         updateStepLabel()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        print("📸 View Did Appear")
     }
 
     // MARK: - Helpers

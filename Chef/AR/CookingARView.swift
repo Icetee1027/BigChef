@@ -8,7 +8,7 @@ import simd
 
 struct CookingARView: UIViewRepresentable {
 
-    @Binding var step: String
+    @ObservedObject var viewModel: StepViewModel
     private let manager = AnimationManger()
 
     func makeUIView(context: Context) -> ARView {
@@ -18,71 +18,122 @@ struct CookingARView: UIViewRepresentable {
 
     @MainActor
     func updateUIView(_ uiView: ARView, context: Context) {
+        let step = viewModel.currentDescription
         guard !step.isEmpty, context.coordinator.lastStep != step else { return }
         context.coordinator.lastStep = step
         uiView.scene.anchors.removeAll()
 
         Task { @MainActor in
-            guard let type = await manager.selectType(for: step) else { return }
-            context.coordinator.lastType = type
-            guard let params = await manager.selectParameters(for: type, from: uiView),
-                  let coords = params.coordinate, coords.count == 3
-            else { return }
-            let position = SIMD3<Float>(coords[0], coords[1], coords[2])
+
+            guard let (type, params) = await manager.selectTypeAndParameters(for: step, from: uiView) else { return }
+            var animation: Animation = Animation(type: type, scale: 1.0, isRepeat: false)
             
-            let animation: Animation
             switch type {
+
             case .putIntoContainer:
+                let containerEnum = params.container ?? .pan
                 animation = PutIntoContainerAnimation(
                     ingredientName: params.ingredient ?? "",
-                    position: position,
+                    container: containerEnum,
                     scale: 1.0,
                     isRepeat: true
                 )
             case .stir:
-                animation = StirAnimation(position: position, scale: 1.0, isRepeat: true)
+                let containerEnum = params.container ?? .pan
+                animation = StirAnimation(
+                    container: containerEnum,
+                    scale: 1.0,
+                    isRepeat: true
+                )
             case .pourLiquid:
                 let liquidColor = UIColor(named: params.color ?? "") ?? .white
+                let containerEnum = params.container ?? .pan
                 animation = PourLiquidAnimation(
-                    position: position,
-                    scale: 1.0,
-                    isRepeat: false,
-                    color: liquidColor
-                )
+                    container: containerEnum,
+                        scale: 1.0,
+                        isRepeat: false,
+                        color: liquidColor
+                    )
             case .flipPan, .flip:
-                animation = FlipAnimation(position: position, scale: 1.0, isRepeat: false)
+                let containerEnum = params.container ?? .pan
+                animation = FlipAnimation(
+                    container: containerEnum,
+                    scale: 1.0,
+                    isRepeat: false
+                )
             case .countdown:
+                let containerEnum = params.container ?? .pan
                 animation = CountdownAnimation(
                     minutes: Int(params.time ?? 1),
-                    position: position,
+                    container: containerEnum,
                     scale: 1.0,
                     isRepeat: false
                 )
             case .temperature:
-                animation = TemperatureAnimation(
-                    temperature: params.temperature ?? 0.0,
-                    position: position,
-                    scale: 1.0,
-                    isRepeat: false
-                )
+                    let containerEnum = params.container ?? .pan
+                    animation = TemperatureAnimation(
+                        container: containerEnum,
+                        temperatureValue: Int(params.temperature ?? 0),
+                        scale: 1.0,
+                        isRepeat: false
+                    )
             case .flame:
                 let flameLevel = FlameLevel(rawValue: params.FlameLevel ?? FlameLevel.medium.rawValue) ?? .medium
+                let containerEnum = params.container ?? .pan
                 animation = FlameAnimation(
                     level: flameLevel,
-                    position: position,
+                    container: containerEnum,
                     scale: 1.0,
                     isRepeat: false
                 )
             case .sprinkle:
-                animation = SprinkleAnimation(position: position, scale: 1.0, isRepeat: false)
+                let sprinkleColor = UIColor(named: params.color ?? "") ?? .white // if needed for color
+                let containerEnum = params.container ?? .pan
+                animation = SprinkleAnimation(
+                    container: containerEnum,
+                    scale: 1.0,
+                    isRepeat: false
+                )
             case .torch:
-                animation = TorchAnimation(position: position, scale: 1.0, isRepeat: false)
+                if let coords = params.coordinate, coords.count == 3 {
+                    let position = SIMD3<Float>(coords[0], coords[1], coords[2])
+                    let containerEnum = params.container ?? .pan
+                    animation = TorchAnimation(
+                        torchPosition: position,
+                        scale: 1.0,
+                        isRepeat: false
+                    )
+                } else {
+                    print("⚠️ 未設定有效的座標，無法播放 torch 動畫")
+                    break
+                }
             case .cut:
-                animation = CutAnimation(position: position, scale: 1.0, isRepeat: false)
+                if let coords = params.coordinate, coords.count == 3 {
+                    let position = SIMD3<Float>(coords[0], coords[1], coords[2])
+                    animation = CutAnimation(cutPosition: position, scale: 1.0, isRepeat: false)
+                } else {
+                    print("⚠️ 未設定有效的座標，無法播放 cut 動畫")
+                    break
+                }
             case .peel:
-                animation = PeelAnimation(position: position, scale: 1.0, isRepeat: false)
+                if let coords = params.coordinate, coords.count == 3 {
+                    let position = SIMD3<Float>(coords[0], coords[1], coords[2])
+                    animation = PeelAnimation(
+                        peelPosition: position,
+                        scale: 1.0,
+                        isRepeat: false
+                    )
+                } else {
+                    print("⚠️ 未設定有效的座標，無法播放 peel 動畫")
+                    break
+                }
             case .beatEgg:
-                animation = BeatEggAnimation(position: position, scale: 1.0, isRepeat: false)
+                let containerEnum = params.container ?? .bowl
+                animation  = BeatEggAnimation(
+                    container: containerEnum,
+                    scale: 1.0,
+                    isRepeat: true
+                )
             }
 
             animation.play(on: uiView)
@@ -93,7 +144,9 @@ struct CookingARView: UIViewRepresentable {
         }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        return Coordinator()
+    }
     class Coordinator {
         var lastStep: String = ""
         var lastType: AnimationType?

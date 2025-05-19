@@ -1,8 +1,9 @@
 import Foundation
 
 enum RecipeService {
-    private static let baseURL = "http://192.168.0.106:8080"  // 直接寫死 BASE_URL
-
+    private static var baseURL: String {
+        Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? ""
+    }
     // MARK: - 食譜生成 async 函式
     static func generateRecipe(using request: SuggestRecipeRequest) async throws -> SuggestRecipeResponse {
         guard let url = URL(string: "\(baseURL)/api/v1/recipe/suggest") else {

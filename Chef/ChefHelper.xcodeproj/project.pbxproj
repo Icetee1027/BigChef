@@ -31,6 +31,7 @@
 		30DC27072DD591D00081F80C /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30DC27062DD591D00081F80C /* ARKit.framework */; };
 		30DC27092DD591E20081F80C /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30DC27082DD591E20081F80C /* RealityKit.framework */; };
 		30DC270C2DD592D10081F80C /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = 30DC270B2DD592D10081F80C /* GoogleGenerativeAI */; };
+		688718182DDBB15F002A81AF /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 688718172DDBB15F002A81AF /* Kingfisher */; };
 		68CE26C62DD88BFF00365F01 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 68CE26C52DD88BFF00365F01 /* FirebaseAuth */; };
 		68CE26C82DD88BFF00365F01 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = 68CE26C72DD88BFF00365F01 /* FirebaseDatabase */; };
 		68CE26CA2DD88BFF00365F01 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 68CE26C92DD88BFF00365F01 /* FirebaseFirestore */; };
@@ -119,6 +120,7 @@
 				68CE26C82DD88BFF00365F01 /* FirebaseDatabase in Frameworks */,
 				30DC270C2DD592D10081F80C /* GoogleGenerativeAI in Frameworks */,
 				30DC27092DD591E20081F80C /* RealityKit.framework in Frameworks */,
+				688718182DDBB15F002A81AF /* Kingfisher in Frameworks */,
 				30DC27072DD591D00081F80C /* ARKit.framework in Frameworks */,
 				68CE26CC2DD88C6200365F01 /* FirebaseCore in Frameworks */,
 				68CE26CE2DD88C6200365F01 /* FirebaseStorage in Frameworks */,
@@ -237,6 +239,7 @@
 				68CE26C92DD88BFF00365F01 /* FirebaseFirestore */,
 				68CE26CB2DD88C6200365F01 /* FirebaseCore */,
 				68CE26CD2DD88C6200365F01 /* FirebaseStorage */,
+				688718172DDBB15F002A81AF /* Kingfisher */,
 			);
 			productName = ChefHelper;
 			productReference = 30AB0E1D2DD64F2700101557 /* ChefHelper.app */;
@@ -269,6 +272,7 @@
 			packageReferences = (
 				30DC270A2DD592D10081F80C /* XCRemoteSwiftPackageReference "generative-ai-swift" */,
 				68CE26C42DD88BFF00365F01 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				688718162DDBB15F002A81AF /* XCRemoteSwiftPackageReference "Kingfisher" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 30D9E04A2DA60DC0001CDE03;
@@ -553,6 +557,14 @@
 				minimumVersion = 0.5.6;
 			};
 		};
+		688718162DDBB15F002A81AF /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.3.2;
+			};
+		};
 		68CE26C42DD88BFF00365F01 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -568,6 +580,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 30DC270A2DD592D10081F80C /* XCRemoteSwiftPackageReference "generative-ai-swift" */;
 			productName = GoogleGenerativeAI;
+		};
+		688718172DDBB15F002A81AF /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 688718162DDBB15F002A81AF /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
 		};
 		68CE26C52DD88BFF00365F01 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -1,12 +1,13 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
+    @StateObject private var viewModel = StepViewModel()
     @State private var stepText: String = ""
-    @State private var submittedStep: String = ""
 
     var body: some View {
         ZStack {
-            CookingARView(step: $submittedStep)
+            CookingARView(viewModel: viewModel)
                 .edgesIgnoringSafeArea(.all)
             VStack {
                 Spacer()
@@ -14,17 +15,12 @@ struct ContentView: View {
                     TextField("輸入烹飪步驟", text: $stepText)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                     Button("送出") {
-                        let current = stepText
-                        submittedStep = ""
-                        submittedStep = current
+                        viewModel.currentDescription = stepText
+                        stepText = ""
                     }
                 }
                 .padding()
             }
         }
     }
-}
-
-#Preview {
-    ContentView()
 }

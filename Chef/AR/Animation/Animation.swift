@@ -3,21 +3,15 @@ import simd
 import RealityKit
 class Animation {
     
-    open var prompt: String {
-        return "動作：\(type.rawValue)。"
-    }
     let type: AnimationType
-    var position: SIMD3<Float>
     var scale: Float
     var isRepeat: Bool = true
     
     init(
         type: AnimationType,
-        position: SIMD3<Float>,
         scale: Float,
         isRepeat: Bool = true) {
         self.type = type
-        self.position = position
         self.scale = scale
         self.isRepeat = isRepeat
     }

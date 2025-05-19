@@ -4,16 +4,9 @@ import RealityKit
 
 class CutAnimation: Animation {
     private let cut: Entity
+    private var cutPosition: SIMD3<Float>?
 
-    override var prompt: String {
-        return """
-        動作：切割食材。
-        請根據以下截圖分析，找出最適合放置切割動畫的三維座標，並僅回傳 JSON 格式：
-        {"coordinate":[x, y, z]}
-        其中 x, y, z 為 0 到 1 之間的浮點數列表。
-        """
-    }
-    init(position: SIMD3<Float> = .zero, scale: Float = 1.0, isRepeat: Bool = false) {
+    init(cutPosition: SIMD3<Float>? = nil, scale: Float = 1.0, isRepeat: Bool = false) {
         guard let url = Bundle.main.url(forResource: "cut", withExtension: "usdz") else {
             fatalError("❌ 找不到 cut.usdz")
         }
@@ -22,12 +15,17 @@ class CutAnimation: Animation {
         } catch {
             fatalError("❌ 無法載入 cut.usdz：\(error)")
         }
-        super.init(type: .cut, position: position, scale: scale, isRepeat: isRepeat)
+        self.cutPosition = cutPosition
+        super.init(type: .cut, scale: scale, isRepeat: isRepeat)
     }
 
     override func play(on arView: ARView) {
         let entity = cut
-        let anchor = AnchorEntity(world: position)
+        guard let cutPosition = cutPosition else {
+            print("⚠️ 未設定 cutPosition，無法播放 cut 動畫")
+            return
+        }
+        let anchor = AnchorEntity(world: cutPosition)
         anchor.addChild(entity)
         arView.scene.addAnchor(anchor)
         if let animation = entity.availableAnimations.first {

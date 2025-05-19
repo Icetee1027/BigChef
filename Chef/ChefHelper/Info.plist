@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>API_BASE_URL</key>
+	<string>http://192.168.0.106:8080</string>
 	<key>GEMINI_API_KEY</key>
 	<string>AIzaSyCDUPeRSvgzSfD91cHzGvz3XOn91IY4md4</string>
 </dict>

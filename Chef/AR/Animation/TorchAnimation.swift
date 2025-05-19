@@ -4,17 +4,10 @@ import RealityKit
 
 class TorchAnimation: Animation {
     private let torch: Entity
+    private var torchPosition: SIMD3<Float>?
 
-    override var prompt: String {
-        return """
-        動作：使用噴槍炙燒。
-        請根據以下截圖分析，找出最適合放置炙燒動畫的三維座標，並僅回傳 JSON 格式：
-        {"coordinate":[x, y, z]}
-        其中 x, y, z 為 0 到 1 之間的浮點數列表。
-        """
-    }
-    init(position: SIMD3<Float> = .zero, scale: Float = 1.0, isRepeat: Bool = false) {
-        // Load the torch USDZ asset
+    init(torchPosition: SIMD3<Float>? = nil, scale: Float = 1.0, isRepeat: Bool = false) {
+        self.torchPosition = torchPosition
         guard let url = Bundle.main.url(forResource: "torch", withExtension: "usdz") else {
             fatalError("❌ 找不到 torch.usdz")
         }
@@ -23,12 +16,16 @@ class TorchAnimation: Animation {
         } catch {
             fatalError("❌ 無法載入 torch.usdz：\(error)")
         }
-        super.init(type: .torch, position: position, scale: scale, isRepeat: isRepeat)
+        super.init(type: .torch, scale: scale, isRepeat: isRepeat)
     }
 
     override func play(on arView: ARView) {
         let entity = torch
-        let anchor = AnchorEntity(world: position)
+        guard let pos = torchPosition else {
+            print("⚠️ 未設定 torchPosition，無法播放 torch 動畫")
+            return
+        }
+        let anchor = AnchorEntity(world: pos)
         anchor.addChild(entity)
         arView.scene.addAnchor(anchor)
         if let animation = entity.availableAnimations.first {

@@ -4,152 +4,149 @@ import simd
 import UIKit
 import RealityKit
 
+
 class AnimationManger {
-    private let model: GenerativeModel
-    
-    init() {
+    private static let sharedModel: GenerativeModel = {
         let apiKey = Bundle.main
-            .object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String
-        ?? ""
-        self.model = GenerativeModel(name: "gemini-2.0-flash-lite", apiKey: apiKey)
+            .object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String ?? ""
+        return GenerativeModel(name: "gemini-2.0-flash-lite", apiKey: apiKey)
+    }()
+
+    private let model: GenerativeModel
+
+    init() {
+        self.model = AnimationManger.sharedModel
     }
     
-    func selectType(for step: String) async -> AnimationType? {
-        let choices = AnimationType.allCases
-            .map { $0.rawValue }
-            .joined(separator: ", ")
-        let prompt = """
-        請根據以下烹飪步驟，從 [\(choices)] 中選擇最符合的 rawValue，僅回傳 enum 的 rawValue，不要其他文字。
-        步驟：\(step)
-        """
-        
-        print("📨 發送 Prompt：\(prompt)")
-        
-        do {
-            let response = try await model.generateContent(prompt)
-            
-            let raw = response.text?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? ""
-            
-            let cleaned = raw.lowercased()
-            if let match = AnimationType.allCases.first(where: { $0.rawValue.lowercased() == cleaned }) {
-                print("✅ 成功匹配 AnimationType: \(match)")
-                return match
-            } else {
-                print("❌ 無法匹配的類型：\(cleaned)")
-                return nil
-            }
-            
-        } catch {
-            print("❌ Gemini SDK 發生錯誤：\(error.localizedDescription)")
-            return nil
-        }
+    private var lastStep: String?
+    private var lastResult: (AnimationType, AnimationParameters)?
+    
+    struct AnimationParameters: Codable {
+        var ingredient: String?
+        var color: String?
+        var coordinate: [Float]?
+        var time: Float?
+        var temperature: Float?
+        var FlameLevel: String?
+        var container: Container?
     }
     
-    func selectParameters(for type: AnimationType, from arView: ARView) async -> AnimationParameters? {
-        // 👉 在主執行緒中取得 keyWindow
-        let window: UIWindow? = await MainActor.run {
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap { $0.windows }
-                .first { $0.isKeyWindow }
+    struct CombinedResult: Codable {
+        var type: String
+        var ingredient: String?
+        var color: String?
+        var coordinate: [Float]?
+        var time: Float?
+        var temperature: Float?
+        var flameLevel: String?
+        var container: String?
+    }
+    
+    func selectTypeAndParameters(for step: String, from arView: ARView) async -> (AnimationType, AnimationParameters)? {
+        if step == lastStep, let cached = lastResult {
+            return cached
         }
-        
-        guard window != nil else {
-            print("⚠️ 無法取得 key window")
-            return nil
-        }
-        
-        // 👉 取得 ARView 截圖
+        // Build choice list
+        let choices = AnimationType.allCases.map { $0.rawValue }.joined(separator: ", ")
+        let containerChoices = Container.allCases.map { $0.rawValue }.joined(separator: ", ")
         let screenshot: UIImage = await withCheckedContinuation { continuation in
-            Task { // 明確轉到 main actor
-                await MainActor.run {
-                    arView.snapshot(saveToHDR: false) { image in
-                        continuation.resume(returning: image ?? UIImage())
-                    }
-                }
+            arView.snapshot(saveToHDR: false) { image in
+                continuation.resume(returning: image ?? UIImage())
             }
         }
-        
-        // 👉 建立動畫物件
-        let dummyAnimation: Animation = {
-            switch type {
-            case .putIntoContainer:
-                return PutIntoContainerAnimation(ingredientName: "", position: .zero, scale: 1.0, isRepeat: true)
-            case .stir:
-                return StirAnimation(position: .zero, scale: 1.0, isRepeat: true)
-            case .pourLiquid:
-                return PourLiquidAnimation(position: .zero, scale: 1.0, isRepeat: false, color: .white)
-            case .flipPan, .flip:
-                return FlipAnimation(position: .zero, scale: 1.0, isRepeat: false)
-            case .countdown:
-                return CountdownAnimation(minutes: 1, position: .zero, scale: 1.0, isRepeat: false)
-            case .temperature:
-                return TemperatureAnimation(temperature: 0.0, position: .zero, scale: 1.0, isRepeat: false)
-            case .flame:
-                return FlameAnimation(level: .medium, position: .zero, scale: 1.0, isRepeat: false)
-            case .sprinkle:
-                return SprinkleAnimation(position: .zero, scale: 1.0, isRepeat: false)
-            case .torch:
-                return TorchAnimation(position: .zero, scale: 1.0, isRepeat: false)
-            case .cut:
-                return CutAnimation(position: .zero, scale: 1.0, isRepeat: false)
-            case .peel:
-                return PeelAnimation(position: .zero, scale: 1.0, isRepeat: false)
-            case .beatEgg:
-                return BeatEggAnimation(position: .zero, scale: 1.0, isRepeat: false)
-            }
-        }()
-        
-        let promptText = dummyAnimation.prompt
+        let promptText = """
+        請根據以下烹飪步驟 "\(step)"，從 [\(choices)] 中選擇最符合的 rawValue，並回傳以下 JSON 結構：
+        {
+          "type": "選中的 rawValue",
+          "container": "選中的 container（\(containerChoices)）",
+          "coordinate": [x, y, z] 或 null,
+          "ingredient": "食材或 null",
+          "color": "顏色或 null",
+          "time": 時間數值或 null,
+          "temperature": 溫度數值或 null,
+          "flameLevel": "small/medium/large 或 null"
+        }
+        依不同動畫類型，以下欄位為必須提供：
+        - putIntoContainer: ingredient, container        
+        - stir: container
+        - pourLiquid: container, color
+        - flipPan: container
+        - countdown: time, container
+        - temperature: temperature, container
+        - flame: container, flameLevel
+        - sprinkle: container
+        - torch: coordinate
+        - cut: coordinate
+        - peel: coordinate
+        - flip: container
+        - beatEgg: container
+        請確保所有回傳的文字值ingredient 使用英文開頭小寫。
+        請確保回傳的 JSON 包含上述必需欄位，並移除所有程式碼區塊標記。
+        請確保回傳的 JSON 嚴格符合 iOS Codable 規範，不含 Optional 或其他與 JSON 格式無關的標識。
+        範例格式：
+        ```json
+        {
+          "type": "pourLiquid",
+          "container": "pan",
+          "coordinate": null,
+          "ingredient": null,
+          "color": "brown",
+          "time": null,
+          "temperature": null,
+          "flameLevel": null
+        }
+        ```
+        """
+        print("📨 發送 Prompt：\(promptText)")
         let textPart = ModelContent.Part.text(promptText)
         let imagePart = ModelContent.Part.png(screenshot.pngData()!)
-        
-        print("📨 發送 Prompt：\(promptText)")
-        
         do {
             let response = try await model.generateContent(textPart, imagePart)
-            let raw = response.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            var jsonString = raw
+            var raw = response.text?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            raw = raw
                 .replacingOccurrences(of: "```json", with: "")
                 .replacingOccurrences(of: "```", with: "")
                 .replacingOccurrences(of: "`", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            print("🔧 清理后 JSON 字串：\(jsonString)")
-            
-            if let startIndex = jsonString.firstIndex(where: { $0 == "{" || $0 == "[" }) {
-                jsonString = String(jsonString[startIndex...])
-                print("🔧 裁切前置文字后 JSON：\(jsonString)")
+            if let start = raw.firstIndex(where: { $0 == "{" }) {
+                raw = String(raw[start...])
             }
-            
-            guard let data = jsonString.data(using: .utf8) else {
-                print("⚠️ 無法將回傳轉為 Data：\(jsonString)")
+            guard let data = raw.data(using: .utf8) else {
+                print("⚠️ 無法將回傳轉為 Data：\(raw)")
                 return nil
             }
-            
             let decoder = JSONDecoder()
-            do {
-                let params = try decoder.decode(AnimationParameters.self, from: data)
-                print("✅ 解析參數：\(params)")
-                return params
-            } catch DecodingError.typeMismatch(let type, let context) {
-                print("⚠️ JSON 解码类型不符 (\(type))，路径：\(context.codingPath)，原始：\(jsonString)")
+            let result = try decoder.decode(CombinedResult.self, from: data)
+            guard let animationType = AnimationType(rawValue: result.type) else {
+                print("❌ 無效的 AnimationType：\(result.type)")
                 return nil
             }
+            let container = result.container.flatMap { Container(rawValue: $0) }
+            let params = AnimationParameters(
+                ingredient: result.ingredient,
+                color: result.color,
+                coordinate: result.coordinate,
+                time: result.time,
+                temperature: result.temperature,
+                FlameLevel: result.flameLevel,
+                container: container
+            )
+            lastStep = step
+            lastResult = (animationType, params)
+            do {
+                let jsonData = try JSONEncoder().encode(params)
+                if let jsonString = String(data: jsonData, encoding: .utf8) {
+                    print("✅ 選擇類型：\(animationType)，參數 JSON：\(jsonString)")
+                } else {
+                    print("✅ 選擇類型：\(animationType)，參數無法轉成 JSON")
+                }
+            } catch {
+                print("✅ 選擇類型：\(animationType)，參數 JSON 編碼失敗：\(error)")
+            }
+            return (animationType, params)
         } catch {
             print("❌ 解析參數失敗：\(error)")
             return nil
         }
     }
-}
-
-struct AnimationParameters: Codable {
-    var ingredient: String?
-    var color: String?
-    var coordinate: [Float]?
-    var time: Float?
-    var temperature: Float?
-    var FlameLevel: String?
 }

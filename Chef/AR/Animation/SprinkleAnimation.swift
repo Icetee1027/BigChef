@@ -4,16 +4,12 @@ import RealityKit
 
 class SprinkleAnimation: Animation {
     private let sprinkle: Entity
+    private let container: Container
+    private var containerPosition: SIMD3<Float>?
+    private var sprinklePosition: SIMD3<Float>?
 
-    override var prompt: String {
-        return """
-        動作：撒上調味料。
-        請根據以下截圖分析，找出最適合放置撒調味料動畫的三維座標，並僅回傳 JSON 格式：
-        {"coordinate":[x, y, z]}
-        其中 x, y, z 為 0 到 1 之間的浮點數列表。
-        """
-    }
-    init(position: SIMD3<Float> = .zero, scale: Float = 1.0, isRepeat: Bool = false) {
+    init(container: Container, scale: Float = 1.0, isRepeat: Bool = false) {
+        self.container = container
         guard let url = Bundle.main.url(forResource: "sprinkle", withExtension: "usdz") else {
             fatalError("❌ 找不到 sprinkle.usdz")
         }
@@ -22,12 +18,16 @@ class SprinkleAnimation: Animation {
         } catch {
             fatalError("❌ 無法載入 sprinkle.usdz：\(error)")
         }
-        super.init(type: .sprinkle, position: position, scale: scale, isRepeat: isRepeat)
+        super.init(type: .sprinkle, scale: scale, isRepeat: isRepeat)
     }
 
     override func play(on arView: ARView) {
+        guard let pos = sprinklePosition else {
+            print("⚠️ 未設定 sprinklePosition，無法播放 sprinkle 動畫")
+            return
+        }
         let entity = sprinkle
-        let anchor = AnchorEntity(world: position)
+        let anchor = AnchorEntity(world: pos)
         anchor.addChild(entity)
         arView.scene.addAnchor(anchor)
         if let animation = entity.availableAnimations.first {
