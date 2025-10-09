@@ -47,6 +47,12 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
     private var qaInputBubbleView: QAInputBubbleView?
     private var qaBubbleDismissTap: UITapGestureRecognizer?
     private var pendingDraftQuestion: String = ""
+    private let qaWakeWord = "阿龍"
+    private lazy var qaVoiceService = QAKeywordVoiceService(wakeWord: qaWakeWord)
+    private var isVoiceDictationActive = false
+    private var shouldStartDictationAfterBubblePresented = false
+    private var baselineDictationTranscript: String?
+    private var lastRawDictation: String = ""
 
     // 手勢狀態 UI
     private let gestureStatusLabel = UILabel()
@@ -167,6 +173,7 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
         stepLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stepLabel)
         setupQAInteractionView()
+        setupQAVoiceService()
 
         // ▼ Prev / Next / Complete Buttons
         let navigationStack = UIStackView(arrangedSubviews: [prevBtn, nextBtn])
@@ -243,6 +250,10 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
         print("👋 [CookViewController] viewWillDisappear - parent=\(parent != nil)")
 
         dismissQABubble(animated: false)
+        qaVoiceService.stop()
+        isVoiceDictationActive = false
+        baselineDictationTranscript = nil
+        lastRawDictation = ""
 
         // 移除 delegate 並停用手勢辨識
         gestureSession.removeGestureDelegate(self)
@@ -346,7 +357,7 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
     }
 
     private func loadQAInteractionModel() {
-        guard let url = Bundle.main.url(forResource: "ingredient", withExtension: "usdz") else {
+        guard let url = Bundle.main.url(forResource: "firebaby", withExtension: "usdz") else {
             return
         }
 
@@ -403,6 +414,18 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
             }
             viewsToDismiss.forEach { $0.removeFromSuperview() }
             self?.removeBubbleDismissGesture()
+            self?.shouldStartDictationAfterBubblePresented = false
+            self?.baselineDictationTranscript = nil
+            if let existing = self?.pendingDraftQuestion, !existing.isEmpty {
+                print("🗣️ [QAVoiceService] Current transcription: \(existing)")
+            }
+            self?.lastRawDictation = ""
+            if let self = self, self.isVoiceDictationActive {
+                self.qaVoiceService.cancelDictationAndResumeKeywordListening()
+                self.isVoiceDictationActive = false
+            } else {
+                self?.qaVoiceService.startKeywordListening()
+            }
         }
 
         if animated {
@@ -479,8 +502,10 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
                 )
 
                 await MainActor.run { [weak self] in
-                    self?.setQAInteractionEnabled(true)
-                    self?.presentQAAnswer(response.answer)
+                    guard let self else { return }
+                    self.setQAInteractionEnabled(true)
+                    self.presentQAAnswer(response.answer)
+                    self.qaVoiceService.startKeywordListening()
                 }
                 print("✅ [CookQA] 成功取得回覆")
             } catch {
@@ -494,8 +519,10 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
                 print("❌ [CookQA] 發送失敗 - \(message)")
 
                 await MainActor.run { [weak self] in
-                    self?.setQAInteractionEnabled(true)
-                    self?.presentQAError(message: message)
+                    guard let self else { return }
+                    self.setQAInteractionEnabled(true)
+                    self.presentQAError(message: message)
+                    self.qaVoiceService.startKeywordListening()
                 }
             }
         }
@@ -509,7 +536,7 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
         }
     }
 
-    private func showQAInputBubble() {
+    private func showQAInputBubble(voiceTriggered: Bool = false) {
         dismissQABubble(animated: false)
 
         let bubble = QAInputBubbleView()
@@ -523,11 +550,26 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
                 bubble?.showValidationError("請輸入想詢問的問題內容。")
                 return
             }
+            self?.qaVoiceService.cancelDictationAndResumeKeywordListening()
+            self?.isVoiceDictationActive = false
+            self?.baselineDictationTranscript = nil
+            self?.lastRawDictation = ""
             self?.submitCookQuestion(trimmed)
+        }
+        bubble.onClear = { [weak self] in
+            guard let self else { return }
+            pendingDraftQuestion = ""
+            baselineDictationTranscript = nil
+            lastRawDictation = ""
         }
 
         view.addSubview(bubble)
         qaInputBubbleView = bubble
+        shouldStartDictationAfterBubblePresented = voiceTriggered
+        if voiceTriggered {
+            baselineDictationTranscript = nil
+            lastRawDictation = ""
+        }
         installBubbleDismissGestureIfNeeded()
 
         let constraints = [
@@ -552,8 +594,9 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
         ) {
             bubble.alpha = 1
             bubble.transform = .identity
-        } completion: { [weak bubble] _ in
+        } completion: { [weak bubble, weak self] _ in
             bubble?.focus()
+            self?.beginVoiceDictationIfNeededAfterBubble()
         }
     }
 
@@ -610,6 +653,16 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
         present(alert, animated: true)
     }
 
+
+
+
+
+
+
+
+
+
+
     // MARK: - 手勢狀態 UI
     private func setupGestureStatusUI() {
         gestureStatusLabel.text = "手勢辨識：準備中"
@@ -651,6 +704,103 @@ final class CookViewController: UIViewController, ARGestureDelegate, UIGestureRe
         DispatchQueue.main.async { [weak self] in
             self?.hoverProgressView.progress = max(0, min(progress, 1))
         }
+    }
+}
+
+// MARK: - CookingARViewWrapper
+/// SwiftUI Wrapper，讓 CookingARView 根據 stepViewModel 自動更新
+private struct CookingARViewWrapper: View {
+    @ObservedObject var stepViewModel: StepViewModel
+    let sessionAdapter: ARSessionAdapter
+
+    var body: some View {
+        Group {
+            if let stepModel = stepViewModel.currentStepModel {
+                CookingARView(
+                    stepModel: stepModel,
+                    sessionAdapter: sessionAdapter
+                )
+                // ✅ 移除 .id() - 讓 SwiftUI 重用同一個 UIView，只透過 updateUIView 更新
+                // 這樣可以避免每次切換步驟都重新創建 ARView，減少記憶體消耗
+            }
+        }
+    }
+}
+
+// MARK: - CookingARViewWrapper
+/// SwiftUI Wrapper，讓 CookingARView 根據 stepViewModel 自動更新
+private struct CookingARViewWrapper: View {
+    @ObservedObject var stepViewModel: StepViewModel
+    let sessionAdapter: ARSessionAdapter
+
+    var body: some View {
+        Group {
+            if let stepModel = stepViewModel.currentStepModel {
+                CookingARView(
+                    stepModel: stepModel,
+                    sessionAdapter: sessionAdapter
+                )
+                // ✅ 移除 .id() - 讓 SwiftUI 重用同一個 UIView，只透過 updateUIView 更新
+                // 這樣可以避免每次切換步驟都重新創建 ARView，減少記憶體消耗
+            }
+        }
+    }
+}
+
+// MARK: - ARGestureDelegate
+extension CookViewController {
+    func didRecognizeGesture(_ gestureType: GestureType) {
+        print("🎯 [CookViewController] 接收到手勢: \(gestureType.description)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            switch gestureType {
+            case .previousStep:
+                self.prevStep()
+            case .nextStep:
+                // 如果在最後一步，「下一步」手勢應該進入完成頁面
+                if self.currentIndex == self.steps.count - 1 {
+                    print("✅ [CookViewController] 最後一步手勢觸發，進入完成頁面")
+                    self.completeRecipe()
+                } else {
+                    self.nextStep()
+                }
+            }
+        }
+    }
+
+    func gestureStateDidChange(_ state: GestureState) {
+        print("🎯 [CookViewController] 手勢狀態變更: \(state.description)")
+        updateGestureStatusUI(state)
+    }
+
+    func hoverProgressDidUpdate(_ progress: Float) {
+        updateHoverProgressUI(progress)
+    }
+
+    func palmStateDidChange(_ palmState: PalmState) {
+        // 目前僅示意；若需要可在這裡更新額外 UI 或紀錄
+        // print("✋ palm state: \(palmState)")
+    }
+
+    func gestureRecognitionDidFail(with error: GestureRecognitionError) {
+        print("❌ [CookViewController] 手勢辨識錯誤: \(error.localizedDescription)")
+        DispatchQueue.main.async { [weak self] in
+            self?.gestureStatusLabel.text = "手勢辨識錯誤：\(error.localizedDescription)"
+            self?.gestureStatusLabel.backgroundColor = UIColor.systemRed.withAlphaComponent(0.6)
+        }
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+extension CookViewController {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if let bubble = qaBubbleView, let touchedView = touch.view, touchedView.isDescendant(of: bubble) {
+            return false
+        }
+        if let inputBubble = qaInputBubbleView, let touchedView = touch.view, touchedView.isDescendant(of: inputBubble) {
+            return false
+        }
+        return true
     }
 }
 
@@ -734,6 +884,7 @@ extension CookViewController {
 // MARK: - QA Bubbles
 private final class QAInputBubbleView: UIView, UITextViewDelegate {
     var onSubmit: ((String) -> Void)?
+    var onClear: (() -> Void)?
 
     private let containerView = UIView()
     private let tailView = SpeechBubbleTailView()
@@ -741,7 +892,9 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
     private let textView = UITextView()
     private let placeholderLabel = UILabel()
     private let sendButton = UIButton(type: .system)
+    private let clearButton = UIButton(type: .system)
     private let errorLabel = UILabel()
+    private var textViewHeightConstraint: NSLayoutConstraint?
 
     private let contentInsets = UIEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
 
@@ -798,6 +951,18 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
         placeholderLabel.font = .systemFont(ofSize: 15)
         textView.addSubview(placeholderLabel)
 
+        clearButton.translatesAutoresizingMaskIntoConstraints = false
+        clearButton.setTitle("清除", for: .normal)
+        clearButton.setTitleColor(UIColor.systemRed, for: .normal)
+        clearButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        clearButton.layer.cornerRadius = 12
+        clearButton.layer.borderWidth = 1
+        clearButton.layer.borderColor = UIColor.systemRed.cgColor
+        clearButton.contentEdgeInsets = UIEdgeInsets(top: 10, left: 18, bottom: 10, right: 18)
+        clearButton.addTarget(self, action: #selector(handleClearTapped), for: .touchUpInside)
+        clearButton.isEnabled = false
+        clearButton.alpha = 0.5
+
         sendButton.translatesAutoresizingMaskIntoConstraints = false
         sendButton.setTitle("送出", for: .normal)
         sendButton.setTitleColor(.white, for: .normal)
@@ -818,6 +983,7 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
         containerView.addSubview(titleLabel)
         containerView.addSubview(textView)
         containerView.addSubview(errorLabel)
+        containerView.addSubview(clearButton)
         containerView.addSubview(sendButton)
 
         let minimumWidth = max(168, sendButton.intrinsicContentSize.width + contentInsets.left + contentInsets.right)
@@ -826,6 +992,8 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
 
         let errorBottom = errorLabel.bottomAnchor.constraint(equalTo: sendButton.topAnchor, constant: -12)
         errorBottom.priority = .defaultHigh
+
+        textViewHeightConstraint = textView.heightAnchor.constraint(equalToConstant: 44)
 
         NSLayoutConstraint.activate([
             containerView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -846,7 +1014,7 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
             textView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: contentInsets.left),
             textView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -contentInsets.right),
             textView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            textView.heightAnchor.constraint(equalToConstant: 44),
+            textViewHeightConstraint!,
 
             placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: 16),
             placeholderLabel.topAnchor.constraint(equalTo: textView.topAnchor, constant: 12),
@@ -856,10 +1024,14 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
             errorLabel.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 6),
             errorBottom,
 
+            clearButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 12),
+            clearButton.leadingAnchor.constraint(greaterThanOrEqualTo: textView.leadingAnchor),
+            clearButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -contentInsets.bottom),
+            clearButton.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -12),
+
             sendButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 12),
             sendButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -contentInsets.right),
-            sendButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -contentInsets.bottom),
-            sendButton.leadingAnchor.constraint(greaterThanOrEqualTo: textView.leadingAnchor, constant: 0)
+            sendButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -contentInsets.bottom)
         ])
 
         setContentHuggingPriority(.required, for: .horizontal)
@@ -880,6 +1052,7 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
         placeholderLabel.isHidden = !text.isEmpty
         clearValidationError()
         updateSendButtonState()
+        resizeTextViewIfNeeded()
     }
 
     func currentDraftText() -> String {
@@ -901,12 +1074,22 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
         onSubmit?(textView.text)
     }
 
+    @objc private func handleClearTapped() {
+        onClear?()
+        textView.text = ""
+        placeholderLabel.isHidden = false
+        clearValidationError()
+        updateSendButtonState()
+        resizeTextViewIfNeeded()
+    }
+
     func textViewDidChange(_ textView: UITextView) {
         placeholderLabel.isHidden = !textView.text.isEmpty
         updateSendButtonState()
         if sendButton.isEnabled {
             clearValidationError()
         }
+        resizeTextViewIfNeeded()
     }
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
@@ -921,6 +1104,27 @@ private final class QAInputBubbleView: UIView, UITextViewDelegate {
         let hasText = !textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         sendButton.isEnabled = hasText
         sendButton.alpha = hasText ? 1.0 : 0.5
+        clearButton.isEnabled = hasText
+        clearButton.alpha = hasText ? 1.0 : 0.5
+    }
+
+    private func resizeTextViewIfNeeded() {
+        guard let heightConstraint = textViewHeightConstraint else { return }
+        let minHeight: CGFloat = 44
+        let maxHeight: CGFloat = 140
+        let fittingSize = CGSize(width: textView.bounds.width, height: CGFloat.greatestFiniteMagnitude)
+        var targetHeight = textView.sizeThatFits(fittingSize).height
+        if targetHeight.isNaN || targetHeight.isInfinite {
+            targetHeight = minHeight
+        }
+        targetHeight = max(minHeight, min(targetHeight, maxHeight))
+        if abs(heightConstraint.constant - targetHeight) > 0.5 {
+            heightConstraint.constant = targetHeight
+            textView.isScrollEnabled = targetHeight >= maxHeight
+            UIView.animate(withDuration: 0.15) {
+                self.layoutIfNeeded()
+            }
+        }
     }
 
     private final class SpeechBubbleTailView: UIView {
