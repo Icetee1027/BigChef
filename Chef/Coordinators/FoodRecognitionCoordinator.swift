@@ -203,7 +203,7 @@ final class FoodRecognitionCoordinator: Coordinator, ObservableObject {
 
         let confirmationView = IngredientConfirmationView(
             recognitionResult: result,
-            onConfirm: { [weak self] selectedIngredients, selectedEquipment in
+            onConfirm: { _, _ in
                 // 此回調不再使用，因為 ViewModel 內部處理生成
                 print("⚠️ FoodRecognitionCoordinator: onConfirm 回調已棄用")
             },

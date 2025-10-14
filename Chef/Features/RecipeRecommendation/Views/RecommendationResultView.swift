@@ -61,7 +61,7 @@ struct RecommendationResultView: View {
         } message: {
             VStack {
                 if let error = arError {
-                    Text(error.localizedDescription ?? "發生未知錯誤")
+                    Text(error.errorDescription ?? "發生未知錯誤")
                     if let recovery = error.recoveryMessage {
                         Text(recovery)
                             .font(.caption)
@@ -135,7 +135,7 @@ struct RecommendationResultView: View {
             }
 
             VStack(spacing: 8) {
-                ForEach(result.ingredients, id: \.name) { ingredient in
+                ForEach(result.ingredients) { ingredient in
                     ResultIngredientItemView(ingredient: ingredient)
                 }
             }
@@ -163,7 +163,7 @@ struct RecommendationResultView: View {
             }
 
             VStack(spacing: 8) {
-                ForEach(result.equipment, id: \.name) { equipment in
+                ForEach(result.equipment) { equipment in
                     ResultEquipmentItemView(equipment: equipment)
                 }
             }
@@ -250,27 +250,28 @@ struct RecommendationResultView: View {
         isStartingAR = true
 
         Task {
-            do {
-                // 檢查 AR 支援（真實設備上才檢查）
-                #if !targetEnvironment(simulator)
-                guard ARWorldTrackingConfiguration.isSupported else {
-                    await showARError(.deviceNotSupported)
-                    return
+            // 檢查 AR 支援（真實設備上才檢查）
+            #if !targetEnvironment(simulator)
+            guard ARWorldTrackingConfiguration.isSupported else {
+                await MainActor.run {
+                    showARError(.deviceNotSupported)
                 }
+                return
+            }
 
-                // 檢查相機權限
-                let hasPermission = await requestCameraPermission()
-                guard hasPermission else {
-                    await showARError(.cameraPermissionDenied)
-                    return
+            // 檢查相機權限
+            let hasPermission = await requestCameraPermission()
+            guard hasPermission else {
+                await MainActor.run {
+                    showARError(.cameraPermissionDenied)
                 }
-                #endif
+                return
+            }
+            #endif
 
-                print("✅ AR 前置檢查完成，啟動 AR 烹飪模式")
-                await launchARCooking()
-
-            } catch {
-                await showARError(.unknown(error.localizedDescription))
+            print("✅ AR 前置檢查完成，啟動 AR 烹飪模式")
+            await MainActor.run {
+                launchARCooking()
             }
         }
     }
@@ -303,7 +304,7 @@ struct RecommendationResultView: View {
         arError = error
         showingARError = true
         isStartingAR = false
-        print("❌ AR 錯誤: \(error.localizedDescription ?? "未知錯誤")")
+        print("❌ AR 錯誤: \(error.errorDescription ?? error.localizedDescription)")
     }
 }
 

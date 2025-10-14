@@ -32,7 +32,7 @@ struct RecommendationErrorView: View {
                         .font(.title2)
                         .fontWeight(.semibold)
 
-                    Text(error.localizedDescription ?? "未知錯誤")
+                    Text(error.errorDescription ?? "未知錯誤")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)

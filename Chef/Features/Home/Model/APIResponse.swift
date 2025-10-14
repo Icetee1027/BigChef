@@ -176,17 +176,17 @@ struct RecipeIngredient: Decodable, Identifiable {
 }
 
 struct RecipeCategory: Decodable, Identifiable {
-    let id: String = UUID().uuidString // 暫時使用生成的ID
+    var id: String = UUID().uuidString // 暫時使用生成的ID
     // 根據實際API添加其他字段
 }
 
 struct RecipeTag: Decodable, Identifiable {
-    let id: String = UUID().uuidString // 暫時使用生成的ID
+    var id: String = UUID().uuidString // 暫時使用生成的ID
     // 根據實際API添加其他字段
 }
 
 struct RecipeTool: Decodable, Identifiable {
-    let id: String = UUID().uuidString // 暫時使用生成的ID
+    var id: String = UUID().uuidString // 暫時使用生成的ID
     // 根據實際API添加其他字段
 }
 

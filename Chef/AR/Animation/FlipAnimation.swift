@@ -38,6 +38,7 @@ class FlipAnimation: Animation {
     override func applyAnimation(to anchor: AnchorEntity, on arView: ARView) {
         let entity = model.clone(recursive: true)
         entity.scale = SIMD3<Float>(repeating: scale)
+        entity.position.y += 0.25
         if let name = ingredient, !name.isEmpty {
             _ = ARText.addLabel(text: name, to: entity)
         }

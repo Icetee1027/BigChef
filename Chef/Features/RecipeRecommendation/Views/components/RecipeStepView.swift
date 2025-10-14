@@ -176,7 +176,7 @@ private struct ActionDetailView: View {
         action: "煎",
         tool_required: "平底鍋",
         material_required: ["蛋"],
-        time_minutes: 3,
+        time_minutes: "3",
         instruction_detail: "蛋液均勻攤平"
     )
 

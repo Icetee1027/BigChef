@@ -42,6 +42,17 @@ final class FoodRecognitionService: FoodRecognitionServiceProtocol {
             // 1. 圖片預處理和壓縮
             let processedImage = preprocessImage(image)
 
+            // 🔍 檢查快取
+            if let cachedHistory = FoodRecognitionHistoryService.shared.findByImage(processedImage) {
+                print("✅ 從快取載入食物辨識結果 - \(cachedHistory.displayName)")
+                print("⏱️ 上次使用：\(formatTimeSince(cachedHistory.lastUsedAt ?? cachedHistory.timestamp))")
+                
+                // 更新使用次數
+                FoodRecognitionHistoryService.shared.incrementUsage(id: cachedHistory.id)
+                
+                return cachedHistory.response
+            }
+
             // 2. 建立請求物件
             guard let request = FoodRecognitionRequest(
                 uiImage: processedImage,
@@ -62,6 +73,10 @@ final class FoodRecognitionService: FoodRecognitionServiceProtocol {
             try validateResponse(response)
 
             print("✅ 食物辨識成功完成")
+            
+            // 💾 儲存到歷史記錄（只有成功的回應才儲存）
+            FoodRecognitionHistoryService.shared.save(image: processedImage, response: response)
+
             return response
 
         } catch let error as NetworkError {
@@ -73,6 +88,25 @@ final class FoodRecognitionService: FoodRecognitionServiceProtocol {
         } catch {
             print("❌ 未知錯誤：\(error)")
             throw FoodRecognitionError.unknown(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func formatTimeSince(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        
+        if interval < 60 {
+            return "剛剛"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)分鐘前"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)小時前"
+        } else {
+            let days = Int(interval / 86400)
+            return "\(days)天前"
         }
     }
 
@@ -129,7 +163,6 @@ private extension FoodRecognitionService {
     /// - Returns: 壓縮後的圖片
     func compressImageIfNeeded(_ image: UIImage) -> UIImage {
         let maxDimension: CGFloat = 1024
-        let maxFileSize: Int = 2 * 1024 * 1024 // 2MB
 
         // 檢查尺寸
         if image.size.width > maxDimension || image.size.height > maxDimension {

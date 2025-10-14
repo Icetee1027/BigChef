@@ -29,20 +29,31 @@ class StirAnimation: Animation {
 
     /// 當父類的 play 被呼叫時，自動注入到 Anchor 上並播放動畫
     override func applyAnimation(to anchor: AnchorEntity, on arView: ARView) {
-        
+        let horizontalOffset: Float = 0.05
+        let forwardOffset: Float = -1.0
+        let verticalOffset: Float = -0.5
+
         let instance = model.clone(recursive: true)
         instance.scale = SIMD3<Float>(repeating: scale)
-        instance.position.x += 0.5
-        instance.position.z -= 1
-        instance.position.y -= 0.5
+        instance.position.x += horizontalOffset
+        instance.position.z += forwardOffset
+        instance.position.y += verticalOffset
         if let name = ingredient, !name.isEmpty {
-            _ = ARText.addLabel(text: name, to: instance)
+            let bounds = instance.visualBounds(relativeTo: instance)
+            _ = ARText.addLabel(
+                text: name,
+                to: instance,
+                padding: 0.18,
+                boundingOverride: bounds,
+                scaleMultiplier: 1.25
+            )
         }
         anchor.addChild(instance)
         if let res = instance.availableAnimations.first {
-            instance.playAnimation(res,
-                                     transitionDuration: 0.2,
-                                     startsPaused: false)
+            let resource = res.repeat(duration: .infinity)
+            instance.playAnimation(resource,
+                                   transitionDuration: 0.2,
+                                   startsPaused: false)
         }
     }
 

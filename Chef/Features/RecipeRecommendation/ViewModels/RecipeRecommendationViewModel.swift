@@ -107,11 +107,35 @@ final class RecipeRecommendationViewModel: ObservableObject {
             recipeDescription: nil
         )
         setupObservations()
+        setupNotificationObservers()
     }
 
     deinit {
         currentTask?.cancel()
         cancellables.removeAll()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Notification Observers
+    
+    private func setupNotificationObservers() {
+        // 監聽從食材辨識預填
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("PrefillIngredientRecognition"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let userInfo = notification.userInfo,
+                  let ingredients = userInfo["ingredients"] as? [String],
+                  let equipment = userInfo["equipment"] as? [String] else {
+                return
+            }
+            
+            Task { @MainActor in
+                self.prefillFromRecognition(ingredients: ingredients, equipment: equipment, recognizedFoodName: nil)
+            }
+        }
     }
 
     // MARK: - Public Methods - Data Prefilling
@@ -159,7 +183,7 @@ final class RecipeRecommendationViewModel: ObservableObject {
         }
 
         // 更新表單驗證狀態
-        validateForm()
+        isFormValid = validateForm()
     }
 
     // MARK: - Private Methods - New API Integration
@@ -171,19 +195,10 @@ final class RecipeRecommendationViewModel: ObservableObject {
         equipment: [String]
     ) async throws -> RecipeRecommendationResponse {
 
-        // 創建帶有時間戳的食材列表，避免 API 快取
-        // 在食材列表最後添加一個隱藏的時間戳標記
-        let timestamp = Date().timeIntervalSince1970
-        let cacheBuster = String(format: "%.0f", timestamp)
-        var ingredientsWithCacheBuster = ingredients
-        ingredientsWithCacheBuster.append("timestamp_\(cacheBuster)")
-
-        print("🔑 辨識食譜添加快取破壞器: timestamp_\(cacheBuster)")
-
         // 使用新的 /api/v1/recipe/generate 端點
         let request = GenerateRecipeByNameRequest(
             dish_name: foodName,
-            preferred_ingredients: ingredientsWithCacheBuster,
+            preferred_ingredients: ingredients,
             excluded_ingredients: [],  // 目前沒有排除的食材
             preferred_equipment: equipment,
             preference: GenerateRecipeByNameRequest.GeneratePreference(
@@ -193,8 +208,50 @@ final class RecipeRecommendationViewModel: ObservableObject {
             )
         )
 
+        // 🔍 檢查快取
+        let requestHash = RecipeHistoryService.shared.calculateRequestHash(request)
+        if let cachedHistory = RecipeHistoryService.shared.findByHash(requestHash) {
+            print("✅ 從快取載入食物生成食譜 - \(cachedHistory.response.dish_name)")
+            print("⏱️ 上次使用：\(formatTimeSince(cachedHistory.lastUsedAt ?? cachedHistory.timestamp))")
+            
+            // 更新使用次數
+            RecipeHistoryService.shared.incrementUsage(id: cachedHistory.id)
+            
+            // 轉換回應格式
+            var cachedResponse = RecipeRecommendationResponse(
+                dishName: cachedHistory.response.dish_name,
+                dishDescription: cachedHistory.response.dish_description,
+                ingredients: cachedHistory.response.ingredients,
+                equipment: cachedHistory.response.equipment,
+                recipe: cachedHistory.response.recipe
+            )
+            
+            // 添加快取標記
+            cachedResponse.isFromCache = true
+            cachedResponse.cacheTimestamp = cachedHistory.timestamp
+            cachedResponse.historyId = cachedHistory.id
+            
+            return cachedResponse
+        }
+
         // 調用新的 RecipeService API
         let recipeResponse = try await RecipeService.generateRecipeByName(using: request)
+
+        // 💾 儲存到歷史記錄（只有成功的回應才儲存）
+        if let history = RecipeHistoryService.shared.saveFromFoodRecipe(
+            request: request,
+            response: recipeResponse
+        ) {
+            var savedResponse = RecipeRecommendationResponse(
+                dishName: recipeResponse.dish_name,
+                dishDescription: recipeResponse.dish_description,
+                ingredients: recipeResponse.ingredients,
+                equipment: recipeResponse.equipment,
+                recipe: recipeResponse.recipe
+            )
+            savedResponse.historyId = history.id
+            return savedResponse
+        }
 
         // 轉換為 RecipeRecommendationResponse
         return RecipeRecommendationResponse(
@@ -204,6 +261,25 @@ final class RecipeRecommendationViewModel: ObservableObject {
             equipment: recipeResponse.equipment,
             recipe: recipeResponse.recipe
         )
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func formatTimeSince(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        
+        if interval < 60 {
+            return "剛剛"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)分鐘前"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)小時前"
+        } else {
+            let days = Int(interval / 86400)
+            return "\(days)天前"
+        }
     }
 
     /// 從份量字串中提取數字
@@ -311,7 +387,7 @@ final class RecipeRecommendationViewModel: ObservableObject {
     func removeIngredient(at index: Int) {
         guard index < availableIngredients.count else { return }
         let removedIngredient = availableIngredients[index]
-        withAnimation(.easeInOut) {
+        _ = withAnimation(.easeInOut) {
             availableIngredients.remove(at: index)
         }
         print("🗑️ RecipeRecommendationViewModel: 移除食材 - \(removedIngredient.name)")
@@ -345,7 +421,7 @@ final class RecipeRecommendationViewModel: ObservableObject {
     func removeEquipment(at index: Int) {
         guard index < availableEquipment.count else { return }
         let removedEquipment = availableEquipment[index]
-        withAnimation(.easeInOut) {
+        _ = withAnimation(.easeInOut) {
             availableEquipment.remove(at: index)
         }
         print("🗑️ RecipeRecommendationViewModel: 移除設備 - \(removedEquipment.name)")
@@ -370,13 +446,38 @@ final class RecipeRecommendationViewModel: ObservableObject {
     // MARK: - Public Methods - 偏好設定管理
 
     func updatePreference(_ newPreference: RecommendationPreference) {
-        preference = newPreference
-        print("⚙️ RecipeRecommendationViewModel: 更新偏好設定")
-        print("   烹飪方式: \(newPreference.cookingMethod ?? "未指定")")
-        print("   飲食限制: \(newPreference.dietaryRestrictions?.joined(separator: ", ") ?? "無")")
-        print("   份量: \(newPreference.servingSize ?? "未指定")")
+        // 標準化烹飪方式
+        let normalizedCookingMethod = normalizeCookingMethod(newPreference.cookingMethod)
+        
+        self.preference = RecommendationPreference(
+            cookingMethod: normalizedCookingMethod,
+            dietaryRestrictions: newPreference.dietaryRestrictions,
+            servingSize: newPreference.servingSize,
+            recipeDescription: newPreference.recipeDescription
+        )
+        isFormValid = validateForm()
     }
-
+    
+    /// 標準化烹飪方式（確保在選項列表中）
+    private func normalizeCookingMethod(_ method: String?) -> String {
+        guard let method = method, !method.isEmpty else {
+            return "一般烹調"
+        }
+        
+        // 如果是 "製作 XXX" 格式，使用預設
+        if method.hasPrefix("製作 ") {
+            return "一般烹調"
+        }
+        
+        // 如果在選項列表中，直接使用
+        if cookingMethods.contains(method) {
+            return method
+        }
+        
+        // 否則使用預設
+        return "一般烹調"
+    }
+    
     func updateCookingMethod(_ method: String) {
         preference = RecommendationPreference(
             cookingMethod: method,
@@ -454,13 +555,11 @@ final class RecipeRecommendationViewModel: ObservableObject {
                 } else {
                     print("🥬 使用一般推薦 API 基於食材生成食譜")
 
-                    // 創建帶有時間戳的 preference，避免 API 快取
-                    let preferenceWithTimestamp = createPreferenceWithCacheBuster()
-
+                    // 使用正常的 preference，啟用本地快取機制
                     response = try await recommendationService.recommendRecipe(
                         ingredients: availableIngredients,
                         equipment: availableEquipment,
-                        preference: preferenceWithTimestamp
+                        preference: preference
                     )
                 }
 
@@ -531,30 +630,5 @@ final class RecipeRecommendationViewModel: ObservableObject {
 
     // MARK: - Private Helper Methods
 
-    /// 創建帶有快取破壞器的 preference，避免 API 回傳快取結果
-    private func createPreferenceWithCacheBuster() -> RecommendationPreference {
-        let timestamp = Date().timeIntervalSince1970
-        let cacheBuster = String(format: "%.0f", timestamp)
-
-        // 將時間戳附加到 recipe_description（隱藏在用戶描述後面）
-        let originalDescription = preference.recipeDescription ?? ""
-        let descriptionWithCacheBuster: String?
-
-        if originalDescription.isEmpty {
-            // 如果沒有用戶描述，使用空格 + 時間戳（API 會忽略前後空格，但會影響快取鍵）
-            descriptionWithCacheBuster = " [\(cacheBuster)]"
-        } else {
-            // 如果有用戶描述，在後面添加時間戳
-            descriptionWithCacheBuster = "\(originalDescription) [\(cacheBuster)]"
-        }
-
-        print("🔑 添加快取破壞器: \(cacheBuster)")
-
-        return RecommendationPreference(
-            cookingMethod: preference.cookingMethod,
-            dietaryRestrictions: preference.dietaryRestrictions,
-            servingSize: preference.servingSize,
-            recipeDescription: descriptionWithCacheBuster
-        )
-    }
+    // createPreferenceWithCacheBuster 已移除，改用本地快取機制
 }

@@ -7,8 +7,12 @@ struct AnimationFactory {
         print("🏭 [AnimationFactory] 創建動畫: type=\(type.rawValue)")
         switch type {
         case .putIntoContainer:
+            let ingredientList = params.ingredient?
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty } ?? []
             return PutIntoContainerAnimation(
-                ingredientName: params.ingredient ?? "",
+                ingredientNames: ingredientList,
                 container: params.container ?? .pan,
                 scale: 0.05,
                 isRepeat: true
@@ -74,19 +78,19 @@ struct AnimationFactory {
         case .torch:
             return TorchAnimation(
                 ingredient: params.ingredient,
-                scale: 1.0,
+                scale: 0.5,
                 isRepeat: true
             )
         case .peel:
             return PeelAnimation(
                 ingredient: params.ingredient,
-                scale: 0.5,
+                scale: 0.01,
                 isRepeat: true
             )
         case .beatEgg:
             return BeatEggAnimation(
                 container: params.container ?? .pan,
-                scale: 0.05,
+                scale: 0.04,
                 isRepeat: true
             )
         }

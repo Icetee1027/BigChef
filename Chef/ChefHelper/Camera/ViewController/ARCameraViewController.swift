@@ -11,8 +11,8 @@ import ARKit
 final class ARCameraViewController: UIViewController {
 
     // MARK: - Data
-    private let steps: [RecipeStep]
-    private var currentIndex = 0 {
+    let steps: [RecipeStep]
+    private(set) var currentIndex = 0 {
         didSet { updateStepLabel() }
     }
 
@@ -75,6 +75,15 @@ final class ARCameraViewController: UIViewController {
         nextBtn.isEnabled = currentIndex < steps.count - 1
     }
 
-    @objc private func prevStep() { currentIndex -= 1 }
-    @objc private func nextStep() { currentIndex += 1 }
+    @objc func prevStep() { goToStep(currentIndex - 1) }
+    @objc func nextStep() { goToStep(currentIndex + 1) }
+
+    func goToStep(_ index: Int) {
+        guard index != currentIndex else { return }
+        guard steps.indices.contains(index) else { return }
+
+        let direction = index > currentIndex ? "➡️" : "⬅️"
+        print("\(direction) [ARCameraViewController] goToStep: \(currentIndex) -> \(index)")
+        currentIndex = index
+    }
 }

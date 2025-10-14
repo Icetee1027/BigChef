@@ -196,7 +196,7 @@ class HandGestureRecognizer: ObservableObject {
         case .hovering:
             updateHoverProgress(hand)
             case .ready:
-                // 持續輸出食指角度
+                // 持續輸出食指角度（僅供除錯使用）
                 if let indexTip = hand.landmarks.first(where: { $0.jointName == .indexTip }),
                    let indexPIP = hand.landmarks.first(where: { $0.jointName == .indexPIP }) {
                     let indexVector = CGPoint(
@@ -204,8 +204,11 @@ class HandGestureRecognizer: ObservableObject {
                         y: indexTip.point.y - indexPIP.point.y
                     )
                     let angle = atan2(indexVector.y, indexVector.x)
+#if DEBUG
                     let angleDegrees = angle * 180 / .pi
                     // print("食指角度: \(String(format: "%.1f", angleDegrees))°")
+                    _ = angleDegrees
+#endif
                 }
                 detectMotion(hand)
         case .processing:
@@ -556,10 +559,12 @@ class HandGestureRecognizer: ObservableObject {
         }
         
         let now = Date()
+#if DEBUG
         let timeSinceLastCheck = now.timeIntervalSince(lastSevenGestureCheckTime)
-        
-        // print("🤚 定期比七手勢檢測: 距離上次檢測 \(String(format: "%.1f", timeSinceLastCheck))秒")
-        
+        // print("🤚 定期比七手勢檢測: 距離上次檢測 \(String(format: \"%.1f\", timeSinceLastCheck))秒")
+        _ = timeSinceLastCheck
+#endif
+
         // 注意：這個方法沒有手部數據，實際檢測在 performSevenGestureCheckWithHand 中進行
     }
     
@@ -598,7 +603,7 @@ class HandGestureRecognizer: ObservableObject {
     }
     
     private func updateHoverProgress(_ hand: HandDetectionResult) {
-        guard var hoverState = hoverState else { return }
+        guard let hoverState = hoverState else { return }
         
         let currentPosition = calculateHandCenter(hand)
         let now = Date()
@@ -677,7 +682,7 @@ class HandGestureRecognizer: ObservableObject {
     }
     
     private func detectMotion(_ hand: HandDetectionResult) {
-        guard let trackingState = motionTrackingState else { return }
+        guard motionTrackingState != nil else { return }
         
         // 檢測食指向左或向右的指向動作
         let pointingResult = detectPointingGesture(hand)
@@ -715,9 +720,7 @@ class HandGestureRecognizer: ObservableObject {
     private func detectPointingGesture(_ hand: HandDetectionResult) -> PointingGestureResult {
         // 獲取食指關節點
         guard let indexTip = hand.landmarks.first(where: { $0.jointName == .indexTip }),
-              let indexPIP = hand.landmarks.first(where: { $0.jointName == .indexPIP }),
-              let indexMCP = hand.landmarks.first(where: { $0.jointName == .indexMCP }),
-              let wrist = hand.landmarks.first(where: { $0.jointName == .wrist }) else {
+              let indexPIP = hand.landmarks.first(where: { $0.jointName == .indexPIP }) else {
             return PointingGestureResult(isPointing: false, direction: .none, confidence: 0.0, position: .zero)
         }
         

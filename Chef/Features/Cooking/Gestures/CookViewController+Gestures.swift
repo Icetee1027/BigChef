@@ -9,13 +9,13 @@ import ARKit
 
 // 如果你的專案裡有自定義 ARGestureDelegate / ARSessionAdapter，這裡實作對應的代理方法。
 // 請確保 CookViewController 裡的 nextStep()/prevStep()/goToStep(_:) 不是 private。
-extension CookViewController: ARGestureDelegate, UIGestureRecognizerDelegate {
+extension CookViewController {
 
     // MARK: - Install
     /// 主控制器在 viewDidLoad() 內呼叫
     func installGestures() {
         // 把 AR 手勢事件回傳給自己
-        gestureSession.delegate = self
+        gestureSession.addGestureDelegate(self)
 
         // MARK: UIKit 補充手勢（左右滑動 + 點擊）
         let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(onSwipeLeft))

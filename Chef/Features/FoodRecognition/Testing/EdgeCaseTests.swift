@@ -59,36 +59,32 @@ final class EdgeCaseTests: ObservableObject {
 
     /// 記憶體壓力測試
     private func testMemoryPressure() async -> (Bool, String) {
-        do {
-            let viewModel = FoodRecognitionViewModel()
-            var images: [UIImage] = []
+        let viewModel = FoodRecognitionViewModel()
+        var images: [UIImage] = []
 
-            // 創建多個大圖片
-            for i in 1...10 {
-                let image = createLargeTestImage(size: CGSize(width: 1000, height: 1000))
-                images.append(image)
-                viewModel.handleImageSelection(image)
+        // 創建多個大圖片
+        for _ in 1...10 {
+            let image = createLargeTestImage(size: CGSize(width: 1000, height: 1000))
+            images.append(image)
+            viewModel.handleImageSelection(image)
 
-                // 檢查記憶體使用
-                let memoryUsage = getCurrentMemoryUsage()
-                if memoryUsage > 200.0 { // 如果記憶體超過 200MB
-                    return (false, "記憶體使用過高: \(String(format: "%.1f", memoryUsage))MB")
-                }
-
-                viewModel.clearSelection()
-
-                // 給系統時間清理
-                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 秒
+            // 檢查記憶體使用
+            let memoryUsage = getCurrentMemoryUsage()
+            if memoryUsage > 200.0 { // 如果記憶體超過 200MB
+                return (false, "記憶體使用過高: \(String(format: "%.1f", memoryUsage))MB")
             }
 
-            // 清理
-            images.removeAll()
-            viewModel.optimizeMemoryUsage()
+            viewModel.clearSelection()
 
-            return (true, "記憶體壓力測試通過")
-        } catch {
-            return (false, "記憶體壓力測試失敗: \(error.localizedDescription)")
+            // 給系統時間清理
+            try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 秒
         }
+
+        // 清理
+        images.removeAll()
+        viewModel.optimizeMemoryUsage()
+
+        return (true, "記憶體壓力測試通過")
     }
 
     /// 大圖片處理測試

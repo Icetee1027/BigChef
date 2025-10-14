@@ -66,6 +66,11 @@ final class IngredientConfirmationViewModel: ObservableObject {
     func configure(with recognitionResult: FoodRecognitionResponse) {
         print("🔄 IngredientConfirmationViewModel: 配置辨識結果")
 
+        // 重新進入調整頁面時，確保回到初始狀態
+        currentTask?.cancel()
+        currentTask = nil
+        generationState = .configuring
+
         // 儲存辨識出的食物名稱
         recognizedFoodName = recognitionResult.recognizedFoods.first?.name
 
@@ -76,6 +81,12 @@ final class IngredientConfirmationViewModel: ObservableObject {
         // 預設選中所有辨識到的食材和器具
         selectedIngredients = Set(recognizedIngredients.map { $0.name })
         selectedEquipment = Set(recognizedEquipment.map { $0.name })
+
+        // 清除先前的自訂項目與輸入內容，避免沿用舊資料
+        customIngredients.removeAll()
+        customEquipment.removeAll()
+        newIngredientName = ""
+        newEquipmentName = ""
 
         print("  辨識食物: \(recognizedFoodName ?? "未知")")
         print("  辨識食材: \(recognizedIngredients.map { $0.name })")

@@ -117,83 +117,152 @@ enum RecipeService {
     private static func generateRecipeUsingFallback(request: RecognizedFoodRecipeRequest) async throws -> SuggestRecipeResponse {
         print("🔄 使用備用方案生成 \(request.recognizedFoodName) 的食譜")
 
-        // 將辨識的食物名稱作為主要需求
-        let fallbackRequest = SuggestRecipeRequest(
-            available_ingredients: request.recognizedIngredients.map { ingredient in
-                Ingredient(
-                    name: ingredient,
-                    type: "食材",
-                    amount: "適量",
-                    unit: "",
-                    preparation: ""
-                )
-            },
-            available_equipment: request.recognizedEquipment.map { equipment in
-                Equipment(
-                    name: equipment,
-                    type: "器具",
-                    size: "",
-                    material: "",
-                    power_source: ""
-                )
-            },
-            preference: Preference(
+        let fallbackRequest = GenerateRecipeByNameRequest(
+            dish_name: request.recognizedFoodName,
+            preferred_ingredients: request.recognizedIngredients,
+            excluded_ingredients: [],
+            preferred_equipment: request.recognizedEquipment,
+            preference: GenerateRecipeByNameRequest.GeneratePreference(
                 cooking_method: "製作 \(request.recognizedFoodName)",
-                dietary_restrictions: [],
+                doneness: nil,
                 serving_size: "\(request.servings)人份"
             )
         )
 
-        return try await generateRecipe(using: fallbackRequest)
+        return try await generateRecipeByName(using: fallbackRequest)
     }
 
     // MARK: - 食譜生成 async 函式
     static func generateRecipe(using request: SuggestRecipeRequest) async throws -> SuggestRecipeResponse {
-        guard let url = URL(string: "\(baseURL)/api/v1/recipe/suggest") else {
-            throw NetworkError.invalidURL
-        }
-        print(baseURL)
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let preferredIngredients = request.available_ingredients
+            .map { $0.name }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-        do {
-            let jsonData = try JSONEncoder().encode(request)
-            urlRequest.httpBody = jsonData
+        let preferredEquipment = request.available_equipment
+            .map { $0.name }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                print("🟢 發送食譜生成請求：\n\(jsonString)")
-            }
-        } catch {
-            print("❌ 請求編碼失敗：\(error)")
-            throw error
-        }
-        
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let excludedIngredients = request.preference.dietary_restrictions
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ 無效的伺服器回應")
-            throw NetworkError.invalidResponse
-        }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            print("❌ HTTP 錯誤：\(httpResponse.statusCode)")
-            throw NetworkError.httpError(httpResponse.statusCode)
-        }
-        
-        do {
-            let decoded = try JSONDecoder().decode(SuggestRecipeResponse.self, from: data)
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("✅ AI 回傳食譜：\n\(jsonString)")
+        let cookingMethod = request.preference.cooking_method == "一般烹調" ? nil : request.preference.cooking_method
+
+        let derivedDishName = deriveDishName(from: request)
+
+        let generateRequest = GenerateRecipeByNameRequest(
+            dish_name: derivedDishName,
+            preferred_ingredients: preferredIngredients,
+            excluded_ingredients: excludedIngredients,
+            preferred_equipment: preferredEquipment,
+            preference: GenerateRecipeByNameRequest.GeneratePreference(
+                cooking_method: cookingMethod,
+                doneness: nil,
+                serving_size: request.preference.serving_size
+            )
+        )
+
+        print("🛠️ 轉換食譜請求 -> 目標菜名：\(generateRequest.dish_name)")
+
+        if let description = request.preference.recipe_description,
+           !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let sanitizedDescription = stripCacheBusterSuffix(description).trimmingCharacters(in: extendedWhitespaces)
+            if !sanitizedDescription.isEmpty {
+                print("📝 使用者需求描述：\(sanitizedDescription)")
             }
-            return decoded
-        } catch {
-            if let raw = String(data: data, encoding: .utf8) {
-                print("🔴 AI 回傳原始資料：\n\(raw)")
-            }
-            print("❌ 解碼失敗：\(error)")
-            throw error
         }
+
+        return try await generateRecipeByName(using: generateRequest)
+    }
+
+    /// 根據使用者的偏好與辨識結果，推導最適合作為生成請求的菜名。
+    ///
+    /// 優先順序如下：
+    /// 1. 使用者在偏好中輸入的食譜描述。
+    /// 2. 從「製作 XXX」這類烹飪方式文字中提取的辨識菜名。
+    /// 3. 以烹調方式與第一個主要食材組合出合理的菜名，若都缺少則使用預設文案。
+    private static func deriveDishName(from request: SuggestRecipeRequest) -> String {
+        if let rawDescription = request.preference.recipe_description?.trimmingCharacters(in: extendedWhitespaces),
+           !rawDescription.isEmpty {
+            let cleanedDescription = stripCacheBusterSuffix(rawDescription).trimmingCharacters(in: extendedWhitespaces)
+            if !cleanedDescription.isEmpty {
+                return cleanedDescription
+            }
+        }
+
+        let mainIngredient = request.available_ingredients
+            .map { trimExtendedWhitespaces($0.name) }
+            .first { !$0.isEmpty }
+
+        let method = trimExtendedWhitespaces(request.preference.cooking_method)
+
+        if let recognizedDishName = extractRecognizedDishName(from: method, mainIngredient: mainIngredient) {
+            return recognizedDishName
+        }
+
+        switch (method.isEmpty || method == "一般烹調", mainIngredient) {
+        case (false, .some(let ingredient)):
+            return "\(method)\(ingredient)"
+        case (false, .none):
+            return method
+        case (true, .some(let ingredient)):
+            return "\(ingredient)創意料理"
+        default:
+            return "AI 創意料理"
+        }
+    }
+
+    private static let extendedWhitespaces: CharacterSet = {
+        var set = CharacterSet.whitespacesAndNewlines
+        set.insert(charactersIn: "\u{3000}") // 全形空白
+        return set
+    }()
+
+    private static func trimExtendedWhitespaces(_ string: String) -> String {
+        string.trimmingCharacters(in: extendedWhitespaces)
+    }
+
+    private static func stripCacheBusterSuffix(_ string: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: "\\s*\\[[0-9]+\\]\\s*$", options: []) else {
+            return string
+        }
+
+        var result = string
+        while true {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            guard let match = regex.firstMatch(in: result, options: [], range: range) else {
+                break
+            }
+            if let swiftRange = Range(match.range, in: result) {
+                result.removeSubrange(swiftRange)
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    private static func extractRecognizedDishName(from method: String, mainIngredient: String?) -> String? {
+        let trimmedMethod = trimExtendedWhitespaces(method)
+        guard !trimmedMethod.isEmpty else { return nil }
+
+        let pattern = "^製作[\\s\u{3000}:：-]*([^\\s].*)$"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return nil
+        }
+
+        let range = NSRange(trimmedMethod.startIndex..<trimmedMethod.endIndex, in: trimmedMethod)
+
+        guard let match = regex.firstMatch(in: trimmedMethod, options: [], range: range),
+              match.numberOfRanges >= 2,
+              let capturedRange = Range(match.range(at: 1), in: trimmedMethod) else {
+            return nil
+        }
+
+        let recognizedName = trimExtendedWhitespaces(String(trimmedMethod[capturedRange]))
+
+        guard !recognizedName.isEmpty else { return nil }
+
+        return recognizedName
     }
     // MARK: - 食物辨識 async 函式
     static func recognizeFood(using request: FoodRecognitionRequest) async throws -> FoodRecognitionResponse {

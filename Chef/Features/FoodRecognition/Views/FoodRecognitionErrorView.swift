@@ -56,7 +56,7 @@ struct FoodRecognitionErrorView: View {
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
 
-                Text(error.localizedDescription ?? "發生未知錯誤")
+                Text(error.errorDescription ?? "發生未知錯誤")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)

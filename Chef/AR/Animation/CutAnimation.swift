@@ -68,7 +68,7 @@ class CutAnimation: Animation {
 
         labelInstance?.removeFromParent()
         if !ingredient.isEmpty {
-            let label = ARText.addLabel(text: ingredient, to: entity, padding: 0.06)
+            let label = ARText.addLabel(text: ingredient, to: entity, padding: -0.03)
             self.labelInstance = label
         }
 

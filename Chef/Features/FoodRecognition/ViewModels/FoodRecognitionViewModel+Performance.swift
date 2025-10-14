@@ -192,7 +192,7 @@ extension FoodRecognitionViewModel {
     /// 圖片預處理優化
     private func preprocessImageForUpload(_ image: UIImage) async -> UIImage {
         return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            DispatchQueue.global(qos: .userInitiated).async {
                 autoreleasepool {
                     // 修正圖片方向
                     let orientationCorrectedImage = image.fixedOrientation()

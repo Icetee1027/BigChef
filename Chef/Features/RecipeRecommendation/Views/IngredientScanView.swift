@@ -247,7 +247,7 @@ struct IngredientScanView: View {
                         Text("辨識到的食材 (\(result.ingredients.count))")
                             .font(.headline)
 
-                        ForEach(result.ingredients, id: \.name) { ingredient in
+                        ForEach(result.ingredients) { ingredient in
                             HStack {
                                 Image(systemName: "carrot.fill")
                                     .foregroundColor(.brandOrange)
@@ -266,7 +266,7 @@ struct IngredientScanView: View {
                         Text("辨識到的器具 (\(result.equipment.count))")
                             .font(.headline)
 
-                        ForEach(result.equipment, id: \.name) { equipment in
+                        ForEach(result.equipment) { equipment in
                             HStack {
                                 Image(systemName: "frying.pan.fill")
                                     .foregroundColor(.brandOrange)

@@ -39,7 +39,8 @@ class PourLiquidAnimation: Animation {
         if let me = entity as? ModelEntity {
             me.model?.materials = [SimpleMaterial(color: color, isMetallic: false)]
         }
-        entity.scale = SIMD3<Float>(repeating: scale)
+        let modelScaleMultiplier: Float = 1.4
+        entity.scale = SIMD3<Float>(repeating: scale * modelScaleMultiplier)
         anchor.addChild(entity)
         let labelText: String
         if let ingredient, !ingredient.isEmpty {
@@ -49,7 +50,13 @@ class PourLiquidAnimation: Animation {
         }
 
         if !labelText.isEmpty {
-            _ = ARText.addLabel(text: labelText, to: entity)
+            _ = ARText.addLabel(
+                text: labelText,
+                to: entity,
+                padding: 0.012,
+                maxWidthRatio: 1.05,
+                scaleMultiplier: 2.8
+            )
         }
         if let anim = entity.availableAnimations.first {
             let resource = isRepeat

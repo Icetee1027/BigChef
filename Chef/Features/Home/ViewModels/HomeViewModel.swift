@@ -85,7 +85,7 @@ final class HomeViewModel: ObservableObject {
         let apiCall = service.fetchRecipes(page: 1, size: 20)
 
         apiCall.sink { [weak self] completion in
-                guard let self = self else { return }
+                guard self != nil else { return }
                 switch completion {
                 case .failure(let error):
                     print("HomeViewModel: ⚠️ API 請求失敗（繼續使用假資料）")

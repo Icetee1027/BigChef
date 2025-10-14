@@ -12,10 +12,21 @@ enum ARText {
         maxWidthRatio: Float = 0.9,
         fontSize: CGFloat = 0.24,
         weight: UIFont.Weight = .semibold,
-        boundingOverride: BoundingBox? = nil
+        boundingOverride: BoundingBox? = nil,
+        scaleMultiplier: Float = 1.0
     ) -> ModelEntity {
+        let formattedText: String
+        if text.contains(",") {
+            let segments = text.split(separator: ",", omittingEmptySubsequences: false)
+            formattedText = segments
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: "\n")
+        } else {
+            formattedText = text
+        }
+
         let mesh = MeshResource.generateText(
-            text,
+            formattedText,
             extrusionDepth: 0.005,
             font: .systemFont(ofSize: fontSize, weight: weight),
             containerFrame: .zero,
@@ -30,8 +41,11 @@ enum ARText {
 
         let originalBounds = label.visualBounds(relativeTo: label)
         let width = max(originalBounds.extents.x, 0.001)
-        let scaleFactor = Float(min(availableWidth / width, 1.0))
-        label.scale = SIMD3<Float>(repeating: scaleFactor)
+        let rawRatio = max(availableWidth / width, 0.001 as Float)
+        let scaleFactor = min(rawRatio, 1.0 as Float)
+        let clampedMultiplier = max(scaleMultiplier, 0.01 as Float)
+        let finalScale = min(scaleFactor * clampedMultiplier, rawRatio)
+        label.scale = SIMD3<Float>(repeating: finalScale)
 
         let scaledBounds = label.visualBounds(relativeTo: label)
         let yPos = baseBounds.max.y + padding + scaledBounds.extents.y * 0.5

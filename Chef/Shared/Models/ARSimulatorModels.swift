@@ -72,7 +72,7 @@ extension RecipeRecommendationResponse {
                             type: action.action,
                             tool: action.tool_required,
                             materials: action.material_required,
-                            duration: action.time_minutes,
+                            duration: Int(action.time_minutes) ?? 0,
                             instructions: action.instruction_detail,
                             temperature: step.temperature
                         )

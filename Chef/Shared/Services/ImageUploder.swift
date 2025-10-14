@@ -5,7 +5,6 @@
 //  Created by 羅辰澔 on 2025/5/7.
 //
 
-import Firebase
 import FirebaseStorage
 import FirebaseCore
 import UIKit

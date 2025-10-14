@@ -12,6 +12,7 @@ class PeelAnimation: Animation {
     private let peelModel: Entity
     private let ingredient: String?
     private let distance: Float
+    private let scaleMultiplier: Float = 0.4
 
     init(ingredient: String? = nil,
          scale: Float,
@@ -35,13 +36,25 @@ class PeelAnimation: Animation {
 
     /// 加入 Anchor 並播放動畫（固定放在鏡頭前方，與 Torch 相同流程）
     override func applyAnimation(to anchor: AnchorEntity, on arView: ARView) {
-        // 建立模型
-        let model = peelModel.clone(recursive: true)
-        model.scale = SIMD3<Float>(repeating: scale)
-        anchor.addChild(model)
+        var content = peelModel.clone(recursive: true)
+        removeSupportNodes(from: content)
+        content = flattenRenderableContent(content)
+        sanitizeAnchoring(for: content)
+
+        let wrapper = Entity()
+        wrapper.name = "PeelAnimationWrapper"
+        wrapper.addChild(content)
+        sanitizeAnchoring(for: wrapper)
+        anchor.addChild(wrapper)
+        applyScale(to: wrapper)
 
         if let ingredient = ingredient {
-            _ = ARText.addLabel(text: ingredient, to: model, padding: 0.04)
+            _ = ARText.addLabel(
+                text: ingredient,
+                to: wrapper,
+                padding: 0.04,
+                scaleMultiplier: max(scale * 8.0, 1.0)
+            )
         }
 
         // 以相機為基準的錨點；重用同一個 camera anchor
@@ -56,13 +69,17 @@ class PeelAnimation: Animation {
         }
 
         // 把外部傳入的 anchor 掛到 camera anchor 底下，並設定距離
-        anchor.setParent(cameraAnchor)
-        anchor.position = SIMD3<Float>(0, 0, -distance)
+        anchor.setParent(cameraAnchor, preservingWorldTransform: false)
+        anchor.transform = Transform(
+            scale: .one,
+            rotation: simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)),
+            translation: SIMD3<Float>(0, 0, -distance)
+        )
 
         // 播放 USDZ 內建動畫（若存在）
-        if let clip = model.availableAnimations.first {
+        if let clip = content.availableAnimations.first {
             let resource = isRepeat ? clip.repeat(duration: .infinity) : clip
-            model.playAnimation(resource, transitionDuration: 0.1, startsPaused: false)
+            content.playAnimation(resource, transitionDuration: 0.1, startsPaused: false)
         } else {
             print("⚠️ USDZ 無可用動畫：peel")
         }
@@ -70,5 +87,57 @@ class PeelAnimation: Animation {
 
     override func updateBoundingBox(rect: CGRect) {
         // no-op
+    }
+
+    private func applyScale(to wrapper: Entity) {
+        let finalScalar = max(scale * scaleMultiplier, 0.01)
+        wrapper.transform.scale = SIMD3<Float>(repeating: finalScalar)
+    }
+
+    private func sanitizeAnchoring(for entity: Entity) {
+        entity.components.remove(AnchoringComponent.self)
+        entity.components.remove(SynchronizationComponent.self)
+        entity.components.remove(PhysicsBodyComponent.self)
+        entity.components.remove(PhysicsMotionComponent.self)
+        entity.components.remove(CollisionComponent.self)
+        for child in entity.children {
+            sanitizeAnchoring(for: child)
+        }
+    }
+
+    private func removeSupportNodes(from entity: Entity) {
+        for child in Array(entity.children) {
+            let lower = child.name.lowercased()
+            if lower.hasPrefix("_") || lower.contains("light") || lower.contains("camera") || lower.contains("env") {
+                entity.removeChild(child)
+            } else {
+                removeSupportNodes(from: child)
+            }
+        }
+    }
+
+    private func flattenRenderableContent(_ entity: Entity) -> Entity {
+        var current = entity
+        while current.children.count == 1,
+              let child = current.children.first,
+              shouldFlattenNode(parentName: current.name, childName: child.name) {
+            let matrix = child.transformMatrix(relativeTo: current)
+            child.transform = Transform(matrix: matrix)
+            current.removeChild(child)
+            current = child
+        }
+        return current
+    }
+
+    private func shouldFlattenNode(parentName: String, childName: String) -> Bool {
+        let parent = parentName.lowercased()
+        let child = childName.lowercased()
+        if parent.isEmpty || parent == "root" || parent == "world" || parent.hasPrefix("world") {
+            return true
+        }
+        if child == "world" || child.hasPrefix("world") {
+            return true
+        }
+        return false
     }
 }

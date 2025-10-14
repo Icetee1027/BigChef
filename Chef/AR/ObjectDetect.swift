@@ -2,6 +2,7 @@ import UIKit
 import Vision
 import CoreML
 import ARKit
+import Foundation
 
 /// 單例，用於 2D 物件偵測並繪製在 overlayView 上
 class ObjectDetector {
@@ -11,6 +12,7 @@ class ObjectDetector {
     private var boxLayers = [CAShapeLayer]()
     private var textLayers = [CATextLayer]()
     private let vnModel: VNCoreMLModel
+    private(set) var latestDetection: DetectionSnapshot?
 
     private init() {
         do {
@@ -19,6 +21,21 @@ class ObjectDetector {
         } catch {
             fatalError("❌ 無法載入 CookDetect 模型：\(error)")
         }
+    }
+
+    struct DetectionSnapshot {
+        let rectInView: CGRect
+        let normalizedRect: CGRect
+        let identifier: String
+        let confidence: Float
+        let timestamp: Date
+    }
+
+    struct NotificationKeys {
+        static let rect = "ObjectDetector.rect"
+        static let normalizedRect = "ObjectDetector.normalizedRect"
+        static let identifier = "ObjectDetector.identifier"
+        static let confidence = "ObjectDetector.confidence"
     }
 
     /// 設定用於繪製偵測結果的 Overlay
@@ -52,7 +69,7 @@ class ObjectDetector {
             for obs in observations {
                 guard let top = obs.labels.first,
                       top.identifier == container.rawValue,
-                      let overlay = self.overlayView
+                      self.overlayView != nil
                 else { continue }
 
                 let box = obs.boundingBox
@@ -68,7 +85,38 @@ class ObjectDetector {
                     let y = (1 - box.maxY) * viewH  // Vision 座標轉 UIKit
                     let h = box.height * viewH
                     let viewRect = CGRect(x: x, y: y, width: w, height: h)
-                    
+                    let normalizedRect: CGRect
+                    if viewW > 0, viewH > 0 {
+                        normalizedRect = CGRect(
+                            x: viewRect.origin.x / viewW,
+                            y: viewRect.origin.y / viewH,
+                            width: viewRect.width / viewW,
+                            height: viewRect.height / viewH
+                        )
+                    } else {
+                        normalizedRect = viewRect
+                    }
+
+                    let snapshot = DetectionSnapshot(
+                        rectInView: viewRect,
+                        normalizedRect: normalizedRect,
+                        identifier: top.identifier,
+                        confidence: top.confidence,
+                        timestamp: Date()
+                    )
+                    self.latestDetection = snapshot
+
+                    NotificationCenter.default.post(
+                        name: .objectDetectorDidDetectContainer,
+                        object: self,
+                        userInfo: [
+                            NotificationKeys.rect: NSValue(cgRect: viewRect),
+                            NotificationKeys.normalizedRect: NSValue(cgRect: normalizedRect),
+                            NotificationKeys.identifier: top.identifier,
+                            NotificationKeys.confidence: NSNumber(value: top.confidence)
+                        ]
+                    )
+
                     // （保持繪製程式碼為註解，僅計算 rect）
                     /*
                     // 1. Bounding box（若未來要顯示可解除註解）
@@ -103,4 +151,8 @@ class ObjectDetector {
             }
         }
     }
+}
+
+extension Notification.Name {
+    static let objectDetectorDidDetectContainer = Notification.Name("ObjectDetectorDidDetectContainer")
 }

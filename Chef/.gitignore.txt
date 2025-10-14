@@ -77,13 +77,13 @@ iOSInjectionProject/
 *~
 
 # Firebase - secrets should not be version controlled
-GoogleService-Info.plist
+#GoogleService-Info.plist
 **/GoogleService-Info.plist
 Firebase-Config.plist
 **/Firebase-Config.plist
 
 # Configuration files with sensitive data
-Config.plist
+#Config.plist
 **/Config.plist
 APIConfig.plist
 **/APIConfig.plist
@@ -120,3 +120,4 @@ iOSInjectionProject/
 
 # Claude AI
 .claude/
+

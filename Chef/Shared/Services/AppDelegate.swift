@@ -7,7 +7,7 @@
 
 // Chef/Shared/Services/AppDelegate.swift
 import UIKit
-import Firebase
+import FirebaseCore
 
 @MainActor
 class AppDelegate: NSObject, UIApplicationDelegate, UIWindowSceneDelegate { // 確保遵從協定
@@ -19,7 +19,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UIWindowSceneDelegate { // �
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // 在應用程序啟動時配置 Firebase
+        // 在應用程序啟動時配置 Firebase Core
         FirebaseApp.configure()
         return true
     }

@@ -37,14 +37,22 @@ class ViewController: UIViewController {
 
         ]
 
-        let preference = Preference(cooking_method: "煎", dietary_restrictions: ["無"], serving_size: "1人份")
-        // 創建請求資料
+        let preference = Preference(cooking_method: "煎", dietary_restrictions: ["無麩質"], serving_size: "1人份")
 
-        let request = SuggestRecipeRequest(available_ingredients: ingredients, available_equipment: equipment, preference: preference)
+        let generateRequest = GenerateRecipeByNameRequest(
+            dish_name: "香煎牛排",
+            preferred_ingredients: ingredients.map { $0.name },
+            excluded_ingredients: preference.dietary_restrictions,
+            preferred_equipment: equipment.map { $0.name },
+            preference: GenerateRecipeByNameRequest.GeneratePreference(
+                cooking_method: preference.cooking_method,
+                doneness: nil,
+                serving_size: preference.serving_size
+            )
+        )
 
         // 呼叫 generateRecipe 函數發送請求
-
-        generateRecipe(request: request)
+        generateRecipe(request: generateRequest)
 
     }
     override func viewDidLoad() {
@@ -54,9 +62,9 @@ class ViewController: UIViewController {
 
 
     
-    func generateRecipe(request: SuggestRecipeRequest) {
+    func generateRecipe(request: GenerateRecipeByNameRequest) {
 
-        guard let url = URL(string: "\(ViewController.baseURL)/api/v1/recipe/suggest") else {
+        guard let url = URL(string: "\(ViewController.baseURL)/api/v1/recipe/generate") else {
             print("無效的 URL")
 
             return
@@ -72,23 +80,16 @@ class ViewController: UIViewController {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // 將資料編碼為 JSON
 
-        let encoder = JSONEncoder()
-
         do {
-
-            let jsonData = try encoder.encode(request) // 編碼 RecipeRequest
-
+            let jsonData = try JSONEncoder().encode(request)
             urlRequest.httpBody = jsonData
 
             if let jsonString = String(data: jsonData, encoding: .utf8) {
                 print("✅ 傳送的 JSON：\n\(jsonString)")
             }
         } catch {
-
             print("無法編碼請求資料：\(error)")
-
             return
-
         }
 
         // 使用 URLSession 發送請求

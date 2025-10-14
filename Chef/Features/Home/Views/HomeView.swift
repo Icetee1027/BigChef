@@ -21,9 +21,7 @@ struct HomeView: View {
                 loadingView
             case .error(let message):
                 ErrorView(message) {
-                    Task {
-                        await viewModel.fetchAllDishes()
-                    }
+                    viewModel.fetchAllDishes()
                 }
             case .dataLoaded:
                 mainContent
@@ -31,9 +29,7 @@ struct HomeView: View {
         }
         .onAppear {
             if viewModel.allDishes == nil {
-                Task {
-                    await viewModel.fetchAllDishes()
-                }
+                viewModel.fetchAllDishes()
             }
         }
         .navigationBarHidden(true)
@@ -79,7 +75,9 @@ struct HomeView: View {
                 Spacer(minLength: 80)
             }
             .refreshable {
-                viewModel.refreshDishes()
+                await MainActor.run {
+                    viewModel.refreshDishes()
+                }
             }
         }
         .background(Color(UIColor.secondarySystemBackground).edgesIgnoringSafeArea(.all))

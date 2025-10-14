@@ -128,7 +128,7 @@ struct Action: Codable {
     var action: String                 // 動作名稱，例如「翻炒」
     var tool_required: String          // 所需工具
     var material_required: [String]    // 所需材料名稱列表
-    var time_minutes: Int              // 時間（分鐘）
+    var time_minutes: String           // 時間（字串格式，如 "3分鐘"）
     var instruction_detail: String     // 詳細說明
 }
 

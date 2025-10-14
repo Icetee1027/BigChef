@@ -47,6 +47,27 @@ class RecipeRecommendationService: RecipeRecommendationServiceProtocol {
         // 記錄請求資訊
         logRequest(ingredients: ingredients, equipment: equipment, preference: preference)
 
+        // 🔍 檢查快取
+        let requestHash = RecipeHistoryService.shared.calculateRequestHash(request)
+        if let cachedHistory = RecipeHistoryService.shared.findByHash(requestHash) {
+            print("✅ 從快取載入食譜 - \(cachedHistory.response.dish_name)")
+            print("⏱️ 上次使用：\(formatTimeSince(cachedHistory.lastUsedAt ?? cachedHistory.timestamp))")
+            
+            // 更新使用次數
+            RecipeHistoryService.shared.incrementUsage(id: cachedHistory.id)
+            
+            // 轉換回應格式
+            let recommendationResponse = convertToRecommendationResponse(from: cachedHistory.response)
+            
+            // 添加快取標記
+            var cachedResponse = recommendationResponse
+            cachedResponse.isFromCache = true
+            cachedResponse.cacheTimestamp = cachedHistory.timestamp
+            cachedResponse.historyId = cachedHistory.id
+            
+            return cachedResponse
+        }
+
         do {
             // 使用現有的 RecipeService.generateRecipe 方法
             let response = try await RecipeService.generateRecipe(using: request)
@@ -57,6 +78,13 @@ class RecipeRecommendationService: RecipeRecommendationServiceProtocol {
             // 記錄成功結果
             logSuccess(response: recommendationResponse)
 
+            // 💾 儲存到歷史記錄（只有成功的回應才儲存）
+            if let history = RecipeHistoryService.shared.save(request: request, response: response) {
+                var savedResponse = recommendationResponse
+                savedResponse.historyId = history.id
+                return savedResponse
+            }
+
             return recommendationResponse
 
         } catch {
@@ -65,6 +93,25 @@ class RecipeRecommendationService: RecipeRecommendationServiceProtocol {
 
             // 轉換錯誤類型
             throw convertToRecommendationError(error)
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func formatTimeSince(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        
+        if interval < 60 {
+            return "剛剛"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)分鐘前"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)小時前"
+        } else {
+            let days = Int(interval / 86400)
+            return "\(days)天前"
         }
     }
 
@@ -186,13 +233,81 @@ class RecipeRecommendationService: RecipeRecommendationServiceProtocol {
     }
 
     private func convertToRecommendationResponse(from response: SuggestRecipeResponse) -> RecipeRecommendationResponse {
+        let sanitizedIngredients = sanitizeIngredients(response.ingredients)
+        let sanitizedEquipment = sanitizeEquipment(response.equipment)
+
         return RecipeRecommendationResponse(
             dishName: response.dish_name,
             dishDescription: response.dish_description,
-            ingredients: response.ingredients,
-            equipment: response.equipment,
+            ingredients: sanitizedIngredients,
+            equipment: sanitizedEquipment,
             recipe: response.recipe
         )
+    }
+
+    private func sanitizeIngredients(_ ingredients: [Ingredient]) -> [Ingredient] {
+        ingredients.compactMap { ingredient in
+            var cleaned = ingredient
+            if containsTimestamp(cleaned.name) {
+                return nil
+            }
+
+            if containsTimestamp(cleaned.type) {
+                cleaned.type = "其他"
+            }
+
+            if containsTimestamp(cleaned.preparation) {
+                cleaned.preparation = removeTimestampOccurrences(from: cleaned.preparation)
+            }
+
+            if containsTimestamp(cleaned.amount) {
+                cleaned.amount = "適量"
+            }
+
+            if containsTimestamp(cleaned.unit) {
+                cleaned.unit = ""
+            }
+
+            return cleaned
+        }
+    }
+
+    private func sanitizeEquipment(_ equipment: [Equipment]) -> [Equipment] {
+        equipment.compactMap { item in
+            var cleaned = item
+            if containsTimestamp(cleaned.name) {
+                return nil
+            }
+
+            if containsTimestamp(cleaned.type) {
+                cleaned.type = "其他設備"
+            }
+
+            if containsTimestamp(cleaned.material) {
+                cleaned.material = ""
+            }
+
+            if containsTimestamp(cleaned.power_source) {
+                cleaned.power_source = ""
+            }
+
+            return cleaned
+        }
+    }
+
+    private func containsTimestamp(_ value: String) -> Bool {
+        value.lowercased().contains("timestamp_")
+    }
+
+    private func removeTimestampOccurrences(from value: String) -> String {
+        let pattern = "timestamp_[0-9]+"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return value
+        }
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        return regex.stringByReplacingMatches(in: value, options: [], range: range, withTemplate: "")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func convertToRecommendationError(_ error: Error) -> RecipeRecommendationError {

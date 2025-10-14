@@ -41,7 +41,7 @@ struct RecipeView: View {
         action: "煎",
         tool_required: "平底鍋",
         material_required: ["牛排"],
-        time_minutes: 5,
+        time_minutes: "5",
         instruction_detail: "煎至表面微焦並鎖住肉汁"
     )
 

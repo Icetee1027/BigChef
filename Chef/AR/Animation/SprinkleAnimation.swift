@@ -32,9 +32,16 @@ class SprinkleAnimation: Animation {
     override func applyAnimation(to anchor: AnchorEntity, on arView: ARView) {
         self.arViewRef = arView
         let entity = model.clone(recursive: true)
-        entity.scale = SIMD3<Float>(repeating: scale)
+        let enlargedScale = scale * 1.35
+        entity.scale = SIMD3<Float>(repeating: enlargedScale)
         if let name = ingredient, !name.isEmpty {
-            _ = ARText.addLabel(text: name, to: entity)
+            _ = ARText.addLabel(
+                text: name,
+                to: entity,
+                padding: 0.02,
+                maxWidthRatio: 0.95,
+                scaleMultiplier: 1.6
+            )
         }
         anchor.addChild(entity)
         if let animation = entity.availableAnimations.first {

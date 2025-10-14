@@ -24,9 +24,7 @@ struct FavoritesView: View {
         }
         .onAppear {
             if viewModel.allDishes == nil {
-                Task {
-                    await viewModel.fetchFavorites()
-                }
+                viewModel.fetchFavorites()
             }
         }
         .navigationTitle("我的收藏")
@@ -70,9 +68,7 @@ struct FavoritesView: View {
                 }
             } else {
                 Button(action: {
-                    Task {
-                        await viewModel.fetchFavorites()
-                    }
+                    viewModel.fetchFavorites()
                 }) {
                     HStack {
                         Image(systemName: "arrow.clockwise")
@@ -128,8 +124,8 @@ struct FavoritesView: View {
             .padding(.bottom, 100) // Add padding for tab bar
         }
         .refreshable {
-            Task {
-                await viewModel.refreshFavorites()
+            await MainActor.run {
+                viewModel.refreshFavorites()
             }
         }
     }

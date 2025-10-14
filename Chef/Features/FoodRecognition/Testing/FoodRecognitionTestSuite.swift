@@ -338,9 +338,6 @@ class FoodRecognitionTestSuite: ObservableObject {
     private func testInvalidImageHandling() async throws {
         let viewModel = FoodRecognitionViewModel()
 
-        // 測試 nil 圖片處理
-        let initialState = viewModel.selectedImage
-
         // 直接設置 nil（模擬異常情況）
         // 這裡我們測試系統的魯棒性
 
@@ -355,7 +352,7 @@ class FoodRecognitionTestSuite: ObservableObject {
         let viewModel = FoodRecognitionViewModel()
 
         // 模擬記憶體壓力（連續處理多張圖片）
-        for i in 1...5 {
+        for index in 1...5 {
             let testImage = createTestImage(size: CGSize(width: 1000, height: 1000))
             viewModel.handleImageSelection(testImage)
 
@@ -364,7 +361,7 @@ class FoodRecognitionTestSuite: ObservableObject {
 
             viewModel.clearSelection()
 
-            print("記憶體壓力測試進度：\(i)/5")
+            print("記憶體壓力測試進度：\(index)/5")
         }
 
         print("✅ 記憶體壓力測試通過")
@@ -409,6 +406,7 @@ class FoodRecognitionTestSuite: ObservableObject {
 
         // 測試 ViewModel 初始化時間
         let viewModel = FoodRecognitionViewModel()
+        _ = viewModel
 
         let initTime = CFAbsoluteTimeGetCurrent() - startTime
 
@@ -629,9 +627,6 @@ class FoodRecognitionTestSuite: ObservableObject {
     private func testRetryMechanism() async throws {
         let viewModel = FoodRecognitionViewModel()
 
-        // 測試重試計數
-        let initialRetryCount = viewModel.retryCount
-
         // 模擬錯誤並檢查重試邏輯
         guard viewModel.retryCount == 0 else {
             throw TestError.assertionFailed("初始重試計數應該為 0")
@@ -704,7 +699,7 @@ class FoodRecognitionTestSuite: ObservableObject {
         print("   通過: \(passed) ✅")
         print("   失敗: \(failed) ❌")
         print("   警告: \(warnings) ⚠️")
-        print("   總體結果: \(overallResult)")
+        print("   總體結果: \(overallResult.displayName)")
     }
 
     private func createTestImage(size: CGSize) -> UIImage {
@@ -742,6 +737,20 @@ class FoodRecognitionTestSuite: ObservableObject {
             return Double(info.resident_size) / 1024.0 / 1024.0 // MB
         } else {
             return 0.0
+        }
+    }
+}
+
+// MARK: - Helpers
+
+private extension FoodRecognitionTestSuite.TestStatus {
+    var displayName: String {
+        switch self {
+        case .pending: return "待執行"
+        case .running: return "執行中"
+        case .passed: return "通過"
+        case .failed: return "失敗"
+        case .warning: return "警告"
         }
     }
 }
@@ -794,7 +803,7 @@ struct FoodRecognitionTestView: View {
                                 .foregroundColor(.secondary)
                         }
                     } else {
-                        Text("總體結果: \(testSuite.overallResult)")
+                        Text("總體結果: \(testSuite.overallResult.displayName)")
                             .font(.headline)
                             .foregroundColor(colorForStatus(testSuite.overallResult))
                     }

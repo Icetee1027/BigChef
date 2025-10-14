@@ -24,6 +24,7 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
     var homeNavController: UINavigationController!
     var foodRecognitionNavController: UINavigationController!
     var recipeRecommendationNavController: UINavigationController!
+    var historyNavController: UINavigationController!
     var favoritesNavController: UINavigationController!
     var settingsNavController: UINavigationController!
 
@@ -41,6 +42,7 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
         homeNavController = UINavigationController()
         foodRecognitionNavController = UINavigationController()
         recipeRecommendationNavController = UINavigationController()
+        historyNavController = UINavigationController()
         favoritesNavController = UINavigationController()
         settingsNavController = UINavigationController()
 
@@ -60,14 +62,19 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
         recipeRecommendationVC.tabBarItem = UITabBarItem(title: "推薦", image: UIImage(systemName: "lightbulb.fill"), tag: 2)
         recipeRecommendationNavController.setViewControllers([recipeRecommendationVC], animated: false)
 
+        let historyCoordinator = HistoryCoordinator(navigationController: historyNavController, parentCoordinator: self)
+        addChildCoordinator(historyCoordinator)
+        historyCoordinator.start()
+        historyNavController.tabBarItem = UITabBarItem(title: "歷史", image: UIImage(systemName: "clock.arrow.circlepath"), tag: 3)
+
         let favoritesView = FavoritesTabView(coordinator: self)
         let favoritesVC = UIHostingController(rootView: favoritesView)
-        favoritesVC.tabBarItem = UITabBarItem(title: "收藏", image: UIImage(systemName: "heart.fill"), tag: 3)
+        favoritesVC.tabBarItem = UITabBarItem(title: "收藏", image: UIImage(systemName: "heart.fill"), tag: 4)
         favoritesNavController.setViewControllers([favoritesVC], animated: false)
 
         let settingsView = SettingsView().environmentObject(authViewModel)
         let settingsVC = UIHostingController(rootView: settingsView)
-        settingsVC.tabBarItem = UITabBarItem(title: "設定", image: UIImage(systemName: "gear"), tag: 4)
+        settingsVC.tabBarItem = UITabBarItem(title: "設定", image: UIImage(systemName: "gear"), tag: 5)
         settingsNavController.setViewControllers([settingsVC], animated: false)
 
         // 創建 TabBarController
@@ -76,6 +83,7 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
             homeNavController,
             foodRecognitionNavController,
             recipeRecommendationNavController,
+            historyNavController,
             favoritesNavController,
             settingsNavController
         ]
@@ -92,8 +100,9 @@ final class MainTabCoordinator: Coordinator, ObservableObject {
         case 0: return homeNavController
         case 1: return foodRecognitionNavController
         case 2: return recipeRecommendationNavController
-        case 3: return favoritesNavController
-        case 4: return settingsNavController
+        case 3: return historyNavController
+        case 4: return favoritesNavController
+        case 5: return settingsNavController
         default: return nil
         }
     }

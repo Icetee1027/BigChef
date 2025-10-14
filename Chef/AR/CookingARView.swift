@@ -418,12 +418,14 @@ struct CookingARView: UIViewRepresentable {
                         forName: Notification.Name("PutIntoContainerAnimationCompleted"),
                         object: nil, queue: .main
                     ) { [weak self] _ in
-                        guard let self = self else { return }
-                        self.isAnimationPlaying = false
-                        if self.isDetectionActive { self.playAnimationLoop() }
-                        if let observer = self.containerCompletionObserver {
-                            NotificationCenter.default.removeObserver(observer)
-                            self.containerCompletionObserver = nil
+                        Task { @MainActor in
+                            guard let self else { return }
+                            self.isAnimationPlaying = false
+                            if self.isDetectionActive { self.playAnimationLoop() }
+                            if let observer = self.containerCompletionObserver {
+                                NotificationCenter.default.removeObserver(observer)
+                                self.containerCompletionObserver = nil
+                            }
                         }
                     }
                     return
@@ -431,19 +433,24 @@ struct CookingARView: UIViewRepresentable {
 
                 playbackSubscription = arView.scene
                     .subscribe(to: AnimationEvents.PlaybackCompleted.self) { [weak self] event in
-                        guard let self = self else { return }
-                        if event.playbackController.entity == model {
-                            self.isAnimationPlaying = false
-                            if self.isDetectionActive { self.playAnimationLoop() }
-                            self.playbackSubscription?.cancel()
-                            self.playbackSubscription = nil
+                        let entity = event.playbackController.entity
+                        Task { @MainActor in
+                            guard let self else { return }
+                            if entity == model {
+                                self.isAnimationPlaying = false
+                                if self.isDetectionActive { self.playAnimationLoop() }
+                                self.playbackSubscription?.cancel()
+                                self.playbackSubscription = nil
+                            }
                         }
                     }
             } else {
                 let work = DispatchWorkItem { [weak self] in
-                    guard let self = self else { return }
-                    self.isAnimationPlaying = false
-                    if self.isDetectionActive { self.playAnimationLoop() }
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.isAnimationPlaying = false
+                        if self.isDetectionActive { self.playAnimationLoop() }
+                    }
                 }
                 staticRemovalWorkItem = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
@@ -451,15 +458,29 @@ struct CookingARView: UIViewRepresentable {
         }
 
 
+        func didRecognizeGesture(_ gestureType: GestureType) {
+#if DEBUG
+            print("🖐️ [CookingARView.Coordinator] didRecognizeGesture:", gestureType)
+#endif
+        }
+
         func gestureStateDidChange(_ state: GestureState) {
+#if DEBUG
+            print("🔄 [CookingARView.Coordinator] gestureStateDidChange:", state)
+#endif
         }
 
         func hoverProgressDidUpdate(_ progress: Float) {
-            // 進度更新由 CookViewController 的 UI 處理
+#if DEBUG
+            let clamped = max(0, min(progress, 1))
+            print("🪄 [CookingARView.Coordinator] hoverProgressDidUpdate:", clamped)
+#endif
         }
 
         func palmStateDidChange(_ palmState: PalmState) {
-            // 手掌狀態變化的處理
+#if DEBUG
+            print("✋ [CookingARView.Coordinator] palmStateDidChange:", palmState)
+#endif
         }
 
         func gestureRecognitionDidFail(with error: GestureRecognitionError) {
@@ -467,6 +488,8 @@ struct CookingARView: UIViewRepresentable {
         }
     }
 }
+
+extension CookingARView.Coordinator: @unchecked Sendable {}
 
 // 需要容器偵測的類型（沿用你的定義）
 extension AnimationType {
@@ -486,66 +509,5 @@ extension AnimationType {
         default:
             return false
         }
-    }
-}
-// 在 CookingARView.swift 裡加上 / 或更新你的 Coordinator 使其完整實作 ARGestureDelegate
-
-extension CookingARView {
-    final class Coordinator: NSObject, ARGestureDelegate {
-        weak var parent: CookingARView?
-
-        init(_ parent: CookingARView) {
-            self.parent = parent
-        }
-
-        // MARK: - ARGestureDelegate
-
-        /// 辨識到手勢動作
-        func didRecognizeGesture(_ gestureType: GestureType) {
-            #if DEBUG
-            print("🖐️ [Coordinator] didRecognizeGesture:", gestureType)
-            #endif
-            // TODO: 視需要更新 parent 的狀態，例如：
-            // parent?.viewModel.currentGesture = gestureType
-        }
-
-        /// 手勢狀態改變
-        func gestureStateDidChange(_ state: GestureState) {
-            #if DEBUG
-            print("🔄 [Coordinator] gestureStateDidChange:", state)
-            #endif
-            // TODO: parent?.viewModel.gestureState = state
-        }
-
-        /// 懸停進度更新（0...1）
-        func hoverProgressDidUpdate(_ progress: Float) {
-            let clamped = max(0, min(progress, 1))
-            #if DEBUG
-            print("🪄 [Coordinator] hoverProgressDidUpdate:", clamped)
-            #endif
-            // TODO: parent?.viewModel.hoverProgress = clamped
-        }
-
-        /// 手掌狀態改變（開/合、朝向等）
-        func palmStateDidChange(_ palmState: PalmState) {
-            #if DEBUG
-            print("✋ [Coordinator] palmStateDidChange:", palmState)
-            #endif
-            // TODO: parent?.viewModel.palmState = palmState
-        }
-
-        /// 手勢辨識出錯
-        func gestureRecognitionDidFail(with error: GestureRecognitionError) {
-            #if DEBUG
-            print("❌ [Coordinator] gestureRecognitionDidFail:", error)
-            #endif
-            // TODO: 視需要顯示提示或回復 UI 狀態
-        }
-    }
-
-    // 若你是 UIViewRepresentable / NSViewRepresentable，記得提供 coordinator
-    //（已存在就不用重複加）
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
     }
 }
