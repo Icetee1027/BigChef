@@ -25,6 +25,12 @@ class ConfigManager {
             print("ConfigManager: 警告 - 找不到 Config.plist，使用預設配置")
             loadDefaultConfiguration()
         }
+        
+        // 優先使用 Info.plist 中的 API_BASE_URL（如果存在）
+        if let infoPlistURL = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String {
+            config["API_BASE_URL"] = infoPlistURL
+            print("ConfigManager: 使用 Info.plist 的 API_BASE_URL: \(infoPlistURL)")
+        }
     }
 
     private func loadDefaultConfiguration() {
