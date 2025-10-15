@@ -86,6 +86,17 @@ struct HistoryView: View {
     private var hasContent: Bool {
         switch viewModel.selectedHistoryType {
         case .recipes:
+            return !viewModel.recipeHistories.isEmpty
+        case .foodRecognition:
+            return !viewModel.foodRecognitionHistories.isEmpty
+        case .ingredientRecognition:
+            return !viewModel.ingredientRecognitionHistories.isEmpty
+        }
+    }
+    
+    private var hasFilteredContent: Bool {
+        switch viewModel.selectedHistoryType {
+        case .recipes:
             return !viewModel.filteredRecipes.isEmpty
         case .foodRecognition:
             return !viewModel.foodRecognitionHistories.isEmpty
@@ -197,30 +208,51 @@ struct HistoryView: View {
                 statisticsBar
                     .padding(.bottom, 8)
                 
-                // 卡片列表
-                LazyVStack(spacing: 12) {
-                    ForEach(viewModel.filteredRecipes) { history in
-                        RecipeHistoryCard(
-                            history: history,
-                            onTap: {
-                                selectedRecipeDetail = history
-                            },
-                            onFavoriteToggle: {
-                                viewModel.toggleFavorite(id: history.id)
-                            },
-                            onDelete: {
-                                selectedRecipeForDelete = history.id
-                                showingDeleteAlert = true
-                            },
-                            onReuse: {
-                                viewModel.incrementUsage(id: history.id)
-                                viewModel.onReuseRecipe?(history)
-                            }
-                        )
+                // 卡片列表或無結果提示
+                if hasFilteredContent {
+                    LazyVStack(spacing: 12) {
+                        ForEach(viewModel.filteredRecipes) { history in
+                            RecipeHistoryCard(
+                                history: history,
+                                onTap: {
+                                    selectedRecipeDetail = history
+                                },
+                                onFavoriteToggle: {
+                                    viewModel.toggleFavorite(id: history.id)
+                                },
+                                onDelete: {
+                                    selectedRecipeForDelete = history.id
+                                    showingDeleteAlert = true
+                                },
+                                onReuse: {
+                                    viewModel.incrementUsage(id: history.id)
+                                    viewModel.onReuseRecipe?(history)
+                                }
+                            )
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                } else {
+                    // 無搜尋結果
+                    VStack(spacing: 16) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 50))
+                            .foregroundColor(.secondary)
+                        
+                        Text("找不到符合的記錄")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        if !viewModel.searchText.isEmpty {
+                            Text("搜尋：\"\(viewModel.searchText)\"")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
             }
         }
     }
